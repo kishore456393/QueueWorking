@@ -1,8 +1,13 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import "./detection-mock"; // Start mock detection generator
+import path from "path";
 
 const app = express();
+
+// Serve uploaded videos
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 declare module 'http' {
   interface IncomingMessage {
