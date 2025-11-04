@@ -1,0 +1,11 @@
+streamlit
+ultralytics
+opencv-python
+pyttsx3
+edge-tts
+plotly
+pandas
+numpy
+pillow
+streamlit-autorefresh
+streamlit-drawable-canvas

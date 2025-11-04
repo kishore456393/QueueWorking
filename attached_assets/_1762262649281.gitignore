@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Streamlit
+.streamlit/
+**/.streamlit/
+
+# Data & runtime artifacts (keep folder, ignore contents)
+data/*
+!data/.gitkeep
+
+# Uploads and media (if used)
+uploads/
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Caches & logs
+*.log
+.pytest_cache/
+.mypy_cache/
+
+# Editors/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Node (if present in subfolders)
+node_modules/
