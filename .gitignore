@@ -1,6 +1,66 @@
-node_modules
-dist
-.DS_Store
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Build outputs
+dist/
+build/
+*.egg-info/
 server/public
-vite.config.ts.*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Uploads and temporary files
+uploads/*
+!uploads/.gitkeep
+*.log
 *.tar.gz
+
+# Python cache
+*.py[cod]
+*$py.class
+__pycache__/
+
+# YOLO models (large files)
+*.pt
+*.onnx
+*.engine
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.local/
+
+# Database
+*.db
+*.sqlite
+
+# Backup and unwanted files
+attached_assets/
+replit.md
+.replit
+HOW_TO_RUN.md
+design_guidelines.md
+vite.config.ts.*
+*.backup
+*_backup.*

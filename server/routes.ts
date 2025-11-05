@@ -7,6 +7,7 @@ import fs from "fs/promises";
 import { storage } from "./storage";
 import { insertVideoSchema, insertQueueZoneSchema, insertDetectionSnapshotSchema, insertSettingsSchema } from "@shared/schema";
 import { startMockDetection, stopMockDetection, isDetectionRunning, setUpdateCallback } from "./detection-mock";
+import { startYoloDetection, stopYoloDetection, isYoloRunning } from "./detection-yolo";
 
 // Configure multer for video uploads
 const upload = multer({
@@ -78,12 +79,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No video file uploaded' });
       }
 
+      // Use the actual stored filename so the client can load via /uploads/:filename
       const video = await storage.createVideo({
-        filename: req.file.originalname,
+        filename: req.file.filename,
         filepath: req.file.path,
       });
 
-      res.json(video);
+      // Also include a convenient publicUrl for the client (backwards-compatible)
+      res.json({
+        ...video,
+        publicUrl: `/uploads/${req.file.filename}`,
+        originalName: req.file.originalname,
+      });
     } catch (error: any) {
       console.error('Video upload error:', error);
       res.status(500).json({ error: error.message });
@@ -248,13 +255,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No queue zones defined for this video' });
       }
 
-      startMockDetection({
-        videoId: req.params.videoId,
-        queueCount: zones.length,
-        updateInterval: 3000,
-      });
-
-      res.json({ success: true, message: `Detection started for ${zones.length} queues` });
+      // Try to start YOLO-based detection; fall back to mock if detector service is unavailable
+      try {
+        await startYoloDetection({
+          videoId: req.params.videoId,
+          updateInterval: 3000,
+        });
+        return res.json({ success: true, message: `YOLO detection started for ${zones.length} queues` });
+      } catch (e: any) {
+        console.warn('YOLO detection unavailable, falling back to mock:', e?.message || e);
+        startMockDetection({
+          videoId: req.params.videoId,
+          queueCount: zones.length,
+          updateInterval: 3000,
+        });
+        return res.json({ success: true, message: `Mock detection started for ${zones.length} queues` });
+      }
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -263,6 +279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/detection/stop', async (req, res) => {
     try {
       stopMockDetection();
+      stopYoloDetection();
       res.json({ success: true, message: 'Detection stopped' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -271,7 +288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/detection/status', async (req, res) => {
     try {
-      res.json({ running: isDetectionRunning() });
+      res.json({ running: isDetectionRunning() || isYoloRunning() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

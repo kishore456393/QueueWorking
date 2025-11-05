@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Home as HomeIcon, Video, BarChart3, Activity } from "lucide-react";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 import HomePage from "@/pages/home";
 import Setup from "@/pages/setup";
@@ -23,7 +25,8 @@ function Router() {
                 QueueGuidance
               </h1>
             </Link>
-            <nav className="flex gap-2">
+            <nav className="flex gap-2 items-center">
+              <ThemeToggle />
               <Link href="/">
                 <Button variant="ghost" size="sm" data-testid="link-home" className="hover-elevate active-elevate-2">
                   <HomeIcon className="w-4 h-4 mr-2" />
@@ -85,12 +88,14 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ThemeProvider defaultTheme="system" storageKey="queueguidance-theme">
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

@@ -62,23 +62,32 @@ export default function Setup() {
   const saveZonesMutation = useMutation({
     mutationFn: async (zones: { videoId: string; polygons: Polygon[] }) => {
       const promises = zones.polygons.map((polygon, index) =>
-        apiRequest('/api/queue-zones', 'POST', {
+        apiRequest('POST', '/api/queue-zones', {
           videoId: zones.videoId,
           queueNumber: index + 1,
           polygonPoints: polygon,
         })
       );
-      await Promise.all(promises);
-      
+      // Ensure all API calls resolve or throw
+      await Promise.all(promises.map(p => p.then(r => r.json())));
+
       // Start detection after zones are saved
-      return apiRequest(`/api/detection/start/${zones.videoId}`, 'POST');
+      return apiRequest('POST', `/api/detection/start/${zones.videoId}`);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Success!",
         description: "Queue zones saved and detection started",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/queue-zones'] });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast({
+        title: 'Failed to save queue zones',
+        description: message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -108,6 +117,22 @@ export default function Setup() {
     const y = (e.clientY - rect.top) * scaleY;
 
     setCurrentPolygon([...currentPolygon, { x, y }]);
+  };
+
+  const handleCanvasRightClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault(); // Prevent context menu
+    if (!isDrawing) return;
+    
+    // Complete the polygon on right-click
+    if (currentPolygon.length >= 3) {
+      completePolygon();
+    } else {
+      toast({
+        title: "Not enough points",
+        description: "Need at least 3 points to complete a queue zone",
+        variant: "destructive",
+      });
+    }
   };
 
   const completePolygon = () => {
@@ -155,17 +180,22 @@ export default function Setup() {
     if (!ctx) return;
 
     const drawFrame = () => {
-      if (video.videoWidth === 0) return;
+      // Only draw when we have current frame data
+      if (video.readyState < 2 || video.videoWidth === 0) return;
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      
+
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      // Draw saved polygons (filled with semi-transparent color)
       polygons.forEach((polygon, i) => {
-        ctx.fillStyle = colors[i % colors.length] + '40';
-        ctx.strokeStyle = colors[i % colors.length];
+        const color = colors[i % colors.length];
+        ctx.fillStyle = color + '40';
+        ctx.strokeStyle = color;
         ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
 
         ctx.beginPath();
         ctx.moveTo(polygon[0].x, polygon[0].y);
@@ -174,32 +204,99 @@ export default function Setup() {
         ctx.fill();
         ctx.stroke();
 
+        // Label (Q1, Q2, ...)
         const centerX = polygon.reduce((sum, p) => sum + p.x, 0) / polygon.length;
         const centerY = polygon.reduce((sum, p) => sum + p.y, 0) / polygon.length;
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 24px sans-serif';
         ctx.fillText(`Q${i + 1}`, centerX - 15, centerY + 8);
+
+        // Draw corner dots for saved polygon
+        polygon.forEach((pt) => {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffffcc';
+          ctx.fill();
+          ctx.strokeStyle = color;
+          ctx.stroke();
+        });
       });
 
+      // Draw in-progress polygon path and points (dashed yellow)
       if (currentPolygon.length > 0) {
+        ctx.save();
         ctx.strokeStyle = '#fbbf24';
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
 
         ctx.beginPath();
         ctx.moveTo(currentPolygon[0].x, currentPolygon[0].y);
-        currentPolygon.forEach(point => {
-          ctx.lineTo(point.x, point.y);
-          ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
-        });
+        for (let i = 1; i < currentPolygon.length; i++) {
+          const p = currentPolygon[i];
+          ctx.lineTo(p.x, p.y);
+        }
         ctx.stroke();
-        ctx.setLineDash([]);
+
+        ctx.restore();
+
+        // Draw visible dots for each clicked point
+        currentPolygon.forEach((p) => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+          ctx.fillStyle = '#fbbf24';
+          ctx.fill();
+          ctx.strokeStyle = '#a16207';
+          ctx.stroke();
+        });
       }
     };
 
     const interval = setInterval(drawFrame, 100);
     return () => clearInterval(interval);
   }, [polygons, currentPolygon]);
+
+  // When a new video is uploaded, force the hidden video element to load metadata
+  // so videoWidth/videoHeight become available for canvas drawing and draw once on load
+  useEffect(() => {
+    if (!uploadedVideo) return;
+    const v = videoRef.current;
+    const c = canvasRef.current;
+    if (!v) return;
+    const onLoadedMetadata = () => {
+      try {
+        // Nudge currentTime to trigger decode in some browsers
+        v.currentTime = Math.max(0.01, v.currentTime);
+      } catch {}
+    };
+    const onLoadedData = () => {
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      if (!ctx) return;
+      if (v.videoWidth && v.videoHeight) {
+        c.width = v.videoWidth;
+        c.height = v.videoHeight;
+        ctx.drawImage(v, 0, 0, c.width, c.height);
+      }
+    };
+    const onError = () => {
+      // Optional: surface a toast if desired
+      // toast({ title: 'Video failed to load', description: 'Try H.264 MP4/WebM.', variant: 'destructive' });
+    };
+    v.addEventListener('loadedmetadata', onLoadedMetadata);
+    v.addEventListener('loadeddata', onLoadedData);
+    v.addEventListener('error', onError as any);
+    // Force reload to ensure metadata is fetched even if element is visually hidden
+    v.load();
+    // Try to start playback silently to ensure frames are decoded
+    v.play().catch(() => {});
+    return () => {
+      v.removeEventListener('loadedmetadata', onLoadedMetadata);
+      v.removeEventListener('loadeddata', onLoadedData);
+      v.removeEventListener('error', onError as any);
+    };
+  }, [uploadedVideo]);
 
   const progress = uploadedVideo ? (polygons.length > 0 ? 100 : 50) : videoFile ? 25 : 0;
 
@@ -278,8 +375,11 @@ export default function Setup() {
               <video
                 ref={videoRef}
                 src={`/uploads/${uploadedVideo.filename}`}
-                className="w-full rounded-lg hidden"
+                className="absolute opacity-0 -z-10 w-px h-px"
                 controls
+                preload="auto"
+                muted
+                playsInline
               />
             )}
           </CardContent>
@@ -330,8 +430,8 @@ export default function Setup() {
               </Button>
             </div>
             <div className="text-sm text-muted-foreground space-y-1">
-              <p>• Click to add points to define queue boundary</p>
-              <p>• Click "Complete Queue" when done (min 3 points)</p>
+              <p>• Left-click to add points to define queue boundary</p>
+              <p>• Right-click to complete queue (min 3 points)</p>
               <p>• Queues defined: {polygons.length}</p>
             </div>
             <Button
@@ -356,6 +456,8 @@ export default function Setup() {
             <canvas
               ref={canvasRef}
               onClick={handleCanvasClick}
+              onMouseDown={handleCanvasClick}
+              onContextMenu={handleCanvasRightClick}
               className="w-full rounded-lg border border-border cursor-crosshair"
               style={{ maxHeight: '600px' }}
               data-testid="canvas-polygon-draw"

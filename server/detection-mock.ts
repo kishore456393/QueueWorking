@@ -101,7 +101,7 @@ export function isDetectionRunning(): boolean {
   return detectionInterval !== null;
 }
 
-// Auto-start demo detection
+// Auto-start demo detection (opt-in via env var DEMO_DETECTION=true)
 export async function initializeDemoDetection() {
   const videos = await storage.getAllVideos();
   if (videos.length > 0) {
@@ -145,5 +145,7 @@ export async function initializeDemoDetection() {
   console.log('Started demo detection with 5 queues');
 }
 
-// Initialize after a short delay
-setTimeout(initializeDemoDetection, 2000);
+// Initialize demo only if explicitly enabled
+if (process.env.DEMO_DETECTION === 'true') {
+  setTimeout(initializeDemoDetection, 2000);
+}
