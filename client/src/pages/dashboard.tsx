@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [selectedVideoId, setSelectedVideoId] = useState<string | undefined>(undefined);
   const [refreshInterval, setRefreshInterval] = useState(2);
   const [selectedLanguage, setSelectedLanguage] = useState('en');
+  const [isAnnouncing, setIsAnnouncing] = useState(false);
 
   const { data: settings } = useQuery<Settings>({
     queryKey: ['/api/settings'],
@@ -153,14 +154,49 @@ export default function Dashboard() {
 
   // Automatic periodic announcements when audio is enabled
   useEffect(() => {
-    if (!settings?.audioEnabled || !displayData) return;
+    if (!settings?.audioEnabled) {
+      return;
+    }
 
+    let isPlaying = false;
+
+    // Play announcement function that checks for data and prevents overlaps
+    const playAnnouncement = async () => {
+      const currentData = latestData || snapshot;
+      if (!currentData || isPlaying) return;
+      
+      try {
+        isPlaying = true;
+        setIsAnnouncing(true);
+        const text = t(selectedLanguage as Language, 'announcement' as any, {
+          bestQueue: currentData.bestQueue,
+          worstQueue: currentData.worstQueue,
+          bestCount: currentData.queueCounts[currentData.bestQueue - 1],
+          worstCount: currentData.queueCounts[currentData.worstQueue - 1],
+        });
+        await playTextToSpeech(text, selectedLanguage);
+      } catch (error) {
+        console.error('Auto-announcement error:', error);
+      } finally {
+        isPlaying = false;
+        setIsAnnouncing(false);
+      }
+    };
+
+    // Don't play immediately, wait for first interval
+    // This prevents immediate playback when toggling settings
+
+    // Play at regular intervals only
     const interval = setInterval(() => {
-      handleSpeak();
+      playAnnouncement();
     }, (settings.audioInterval || 30) * 1000);
 
-    return () => clearInterval(interval);
-  }, [settings?.audioEnabled, settings?.audioInterval, displayData, selectedLanguage]);
+    return () => {
+      clearInterval(interval);
+      isPlaying = false;
+      setIsAnnouncing(false);
+    };
+  }, [settings?.audioEnabled, settings?.audioInterval, selectedLanguage]);
 
   const getLanguageCode = (lang: string): string => {
     const langMap: Record<string, string> = {
@@ -191,8 +227,9 @@ export default function Dashboard() {
   };
 
   const handleSpeak = async () => {
-    if (!displayData) return;
+    if (!displayData || isAnnouncing) return;
     
+    setIsAnnouncing(true);
     try {
       const text = t(selectedLanguage as Language, 'announcement' as any, {
         bestQueue: displayData.bestQueue,
@@ -209,6 +246,8 @@ export default function Dashboard() {
         description: "Could not play audio announcement",
         variant: "destructive",
       });
+    } finally {
+      setIsAnnouncing(false);
     }
   };
 

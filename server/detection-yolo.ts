@@ -46,7 +46,7 @@ async function postToDetector(imageB64: string, polygons: Array<Array<{ x: numbe
   const body = {
     image_b64: imageB64,
     polygons: polygons.map((pts) => ({ points: pts })),
-    conf: 0.03,
+    conf: 0.07,
   };
   const res = await fetch("http://127.0.0.1:8000/detect", {
     method: "POST",
@@ -87,16 +87,18 @@ export async function startYoloDetection(params: { videoId: string; updateInterv
       const detectionResult = await postToDetector(b64, polygons);
       const counts = detectionResult.counts;
       const totalPeople = counts.reduce((s, c) => s + c, 0);
-      const bestIdx = counts.indexOf(Math.min(...counts));
-      const worstIdx = counts.indexOf(Math.max(...counts));
+      
+      // Enhanced recommendation algorithm
+      const recommendation = calculateSmartRecommendation(counts, zones);
+      
       const snapshot = await storage.createDetectionSnapshot({
         videoId,
         totalQueues: counts.length,
         queueCounts: counts,
         totalPeople,
-        bestQueue: bestIdx + 1,
-        worstQueue: worstIdx + 1,
-        recommendation: `Queue ${bestIdx + 1} is fastest with ${counts[bestIdx]} ${counts[bestIdx] === 1 ? 'person' : 'people'} waiting`,
+        bestQueue: recommendation.bestQueue,
+        worstQueue: recommendation.worstQueue,
+        recommendation: recommendation.message,
         frameData: detectionResult.annotatedFrame || `data:image/jpeg;base64,${b64}`,
       });
       // No-op: routes.ts will poll latest snapshot or use websockets if wired
@@ -108,6 +110,90 @@ export async function startYoloDetection(params: { videoId: string; updateInterv
       console.error("YOLO detection tick failed:", e);
     }
   }, updateInterval);
+}
+
+/**
+ * Calculate smart queue recommendation considering multiple factors:
+ * 1. Queue length difference
+ * 2. Predicted wait time savings (2 min per person)
+ * 3. Physical proximity between queues
+ */
+function calculateSmartRecommendation(
+  counts: number[],
+  zones: Array<{ queueNumber: number; polygonPoints: any }>
+): {
+  bestQueue: number;
+  worstQueue: number;
+  message: string;
+} {
+  const bestIdx = counts.indexOf(Math.min(...counts));
+  const worstIdx = counts.indexOf(Math.max(...counts));
+  const bestCount = counts[bestIdx];
+  const worstCount = counts[worstIdx];
+  
+  // Calculate queue length difference
+  const lengthDifference = worstCount - bestCount;
+  
+  // Calculate predicted wait time savings (assuming 2 minutes per person)
+  const waitTimeSavings = lengthDifference * 2;
+  
+  // Calculate proximity (distance between queue centroids)
+  const proximity = calculateQueueProximity(
+    zones[worstIdx].polygonPoints,
+    zones[bestIdx].polygonPoints
+  );
+  
+  // Determine if recommendation is worthwhile
+  // Only recommend if difference is significant enough (at least 2 people or 4+ min savings)
+  const isWorthRecommending = lengthDifference >= 2 || waitTimeSavings >= 4;
+  
+  let message: string;
+  if (isWorthRecommending) {
+    const distanceDesc = proximity < 50 ? "nearby" : proximity < 150 ? "close" : "alternative";
+    message = `Queue ${bestIdx + 1} is fastest with ${bestCount} ${bestCount === 1 ? 'person' : 'people'}. ` +
+      `Moving from Queue ${worstIdx + 1} (${worstCount} ${worstCount === 1 ? 'person' : 'people'}) ` +
+      `saves approximately ${waitTimeSavings} minutes. ${distanceDesc.charAt(0).toUpperCase() + distanceDesc.slice(1)} queue available.`;
+  } else {
+    message = `All queues are balanced. Queue ${bestIdx + 1} is fastest with ${bestCount} ${bestCount === 1 ? 'person' : 'people'} waiting.`;
+  }
+  
+  return {
+    bestQueue: bestIdx + 1,
+    worstQueue: worstIdx + 1,
+    message,
+  };
+}
+
+/**
+ * Calculate the approximate distance between two queue polygons
+ * using their centroids
+ */
+function calculateQueueProximity(
+  polygon1: Array<{ x: number; y: number }>,
+  polygon2: Array<{ x: number; y: number }>
+): number {
+  // Calculate centroid of each polygon
+  const centroid1 = calculateCentroid(polygon1);
+  const centroid2 = calculateCentroid(polygon2);
+  
+  // Calculate Euclidean distance
+  const dx = centroid2.x - centroid1.x;
+  const dy = centroid2.y - centroid1.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Calculate the centroid (center point) of a polygon
+ */
+function calculateCentroid(points: Array<{ x: number; y: number }>): { x: number; y: number } {
+  const sum = points.reduce(
+    (acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }),
+    { x: 0, y: 0 }
+  );
+  return {
+    x: sum.x / points.length,
+    y: sum.y / points.length,
+  };
 }
 
 export function stopYoloDetection() {

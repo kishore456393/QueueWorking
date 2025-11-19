@@ -8,6 +8,7 @@ import { storage } from "./storage";
 import { insertVideoSchema, insertQueueZoneSchema, insertDetectionSnapshotSchema, insertSettingsSchema } from "@shared/schema";
 import { startMockDetection, stopMockDetection, isDetectionRunning, setUpdateCallback } from "./detection-mock";
 import { startYoloDetection, stopYoloDetection, isYoloRunning } from "./detection-yolo";
+import { captureStreamFrame, validateStreamUrl } from "./stream-capture";
 
 // Configure multer for video uploads
 const upload = multer({
@@ -83,6 +84,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const video = await storage.createVideo({
         filename: req.file.filename,
         filepath: req.file.path,
+        sourceType: 'file',
       });
 
       // Also include a convenient publicUrl for the client (backwards-compatible)
@@ -93,6 +95,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('Video upload error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add camera stream
+  app.post('/api/cameras', async (req, res) => {
+    try {
+      const { name, streamUrl, sourceType } = req.body;
+      
+      if (!streamUrl || !sourceType) {
+        return res.status(400).json({ error: 'Missing streamUrl or sourceType' });
+      }
+
+      // Validate stream URL
+      console.log(`Validating stream: ${streamUrl}`);
+      const isValid = await validateStreamUrl(streamUrl);
+      
+      if (!isValid) {
+        return res.status(400).json({ error: 'Cannot connect to stream URL' });
+      }
+
+      // Create camera entry
+      const camera = await storage.createVideo({
+        filename: name || `Camera - ${sourceType}`,
+        filepath: streamUrl, // Store URL in filepath
+        sourceType: sourceType,
+        streamUrl: streamUrl,
+      });
+
+      res.json(camera);
+    } catch (error: any) {
+      console.error('Camera add error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Capture frame from camera stream
+  app.get('/api/cameras/:id/frame', async (req, res) => {
+    try {
+      const video = await storage.getVideo(req.params.id);
+      
+      if (!video) {
+        return res.status(404).json({ error: 'Camera not found' });
+      }
+
+      if (!video.streamUrl) {
+        return res.status(400).json({ error: 'Not a camera stream' });
+      }
+
+      const frameData = await captureStreamFrame(video.streamUrl);
+      res.json({ frameData });
+    } catch (error: any) {
+      console.error('Frame capture error:', error);
       res.status(500).json({ error: error.message });
     }
   });

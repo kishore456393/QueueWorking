@@ -8,6 +8,8 @@ export const videos = pgTable("videos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   filename: text("filename").notNull(),
   filepath: text("filepath").notNull(),
+  sourceType: text("source_type").notNull().default("file"), // "file", "rtsp", "http", or "webcam"
+  streamUrl: text("stream_url"), // URL for live streams
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
 });
 

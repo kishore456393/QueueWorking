@@ -1,22 +1,42 @@
-# Dependencies
-node_modules/
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-
-# Build outputs
-dist/
-build/
-*.egg-info/
+node_modules
+dist
+.DS_Store
 server/public
+vite.config.ts.*
+*.tar.gz
 
-# Environment files
-.env
-.env.local
-.env.*.local
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv/
+ENV/
+
+# Uploads
+uploads/*.mp4
+uploads/*.avi
+uploads/*.mov
+uploads/*.mkv
+
+# YOLO models (keep only in detector folder)
+yolov8*.pt
+!detector/yolov8*.pt
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
 
 # IDE
 .vscode/
@@ -24,43 +44,3 @@ server/public
 *.swp
 *.swo
 *~
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Uploads and temporary files
-uploads/*
-!uploads/.gitkeep
-*.log
-*.tar.gz
-
-# Python cache
-*.py[cod]
-*$py.class
-__pycache__/
-
-# YOLO models (large files)
-*.pt
-*.onnx
-*.engine
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
-.local/
-
-# Database
-*.db
-*.sqlite
-
-# Backup and unwanted files
-attached_assets/
-replit.md
-.replit
-HOW_TO_RUN.md
-design_guidelines.md
-vite.config.ts.*
-*.backup
-*_backup.*

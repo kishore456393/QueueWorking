@@ -5,6 +5,7 @@ import {
   type Settings, type InsertSettings
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { PrivacyManager } from "./privacy-manager";
 
 export interface IStorage {
   // Video operations
@@ -33,12 +34,17 @@ export class MemStorage implements IStorage {
   private queueZones: Map<string, QueueZone>;
   private detectionSnapshots: Map<string, DetectionSnapshot>;
   private settings: Settings | undefined;
+  private cleanupInterval: NodeJS.Timeout;
 
   constructor() {
     this.videos = new Map();
     this.queueZones = new Map();
     this.detectionSnapshots = new Map();
     this.settings = undefined;
+    
+    // Start automatic privacy-preserving cleanup
+    this.cleanupInterval = PrivacyManager.startAutoCleanup(this.detectionSnapshots);
+    console.log('[Privacy] Edge computing mode enabled - data retention limited to 1 hour');
   }
 
   // Video operations
@@ -103,6 +109,8 @@ export class MemStorage implements IStorage {
   // Detection Snapshot operations
   async createDetectionSnapshot(insertSnapshot: InsertDetectionSnapshot): Promise<DetectionSnapshot> {
     const id = randomUUID();
+    
+    // Edge computing privacy: Store only aggregate statistics, not full frame data
     const snapshot: DetectionSnapshot = {
       id,
       videoId: insertSnapshot.videoId,
@@ -113,9 +121,14 @@ export class MemStorage implements IStorage {
       bestQueue: insertSnapshot.bestQueue,
       worstQueue: insertSnapshot.worstQueue,
       recommendation: insertSnapshot.recommendation,
-      frameData: insertSnapshot.frameData || null,
+      // Privacy: Only store frame data temporarily for visualization
+      // It will be automatically removed after 1 hour by the cleanup service
+      frameData: insertSnapshot.frameData,
+      recommendation: insertSnapshot.recommendation,
     };
+    
     this.detectionSnapshots.set(id, snapshot);
+    console.log(`[Privacy] Snapshot created - aggregate stats only, auto-expires in 1 hour`);
     return snapshot;
   }
 

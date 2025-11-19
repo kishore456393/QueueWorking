@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from ultralytics import YOLO
 from PIL import Image
-from detector.tts_service import text_to_speech_base64
+from tts_service import text_to_speech_base64
 
 app = FastAPI()
 
@@ -112,7 +112,7 @@ def detect(req: DetectRequest):
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
     # Run YOLO detection for person class (0)
-    results = _model.predict(frame, classes=[0], conf=req.conf or 0.15, verbose=False)
+    results = _model.predict(frame, classes=[0], conf=req.conf or 0.07, verbose=False)
 
     # Aggregate counts per polygon using bbox center and draw boxes
     counts = [0 for _ in req.polygons]
@@ -189,3 +189,8 @@ async def text_to_speech(req: TTSRequest):
             return TTSResponse(error="Failed to generate speech")
     except Exception as e:
         return TTSResponse(error=str(e))
+
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(app, host='127.0.0.1', port=8000)

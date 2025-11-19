@@ -3,9 +3,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Video, type QueueZone } from "@shared/schema";
-import { Upload, Edit3, Play, CheckCircle2 } from "lucide-react";
+import { Upload, Edit3, Play, CheckCircle2, Camera, Video as VideoIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Point = { x: number; y: number };
@@ -21,6 +25,12 @@ export default function Setup() {
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  
+  // Camera stream states
+  const [cameraName, setCameraName] = useState("");
+  const [streamUrl, setStreamUrl] = useState("");
+  const [streamType, setStreamType] = useState<string>("rtsp");
+  const [capturedFrame, setCapturedFrame] = useState<string | null>(null);
 
   const colors = [
     '#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6',
@@ -91,6 +101,45 @@ export default function Setup() {
     },
   });
 
+  const addCameraMutation = useMutation({
+    mutationFn: async (data: { name: string; streamUrl: string; sourceType: string }) => {
+      const response = await apiRequest('POST', '/api/cameras', data);
+      return response.json();
+    },
+    onSuccess: (camera) => {
+      setUploadedVideo(camera);
+      queryClient.invalidateQueries({ queryKey: ['/api/videos'] });
+      // Capture initial frame for drawing
+      captureFrame(camera.id);
+      toast({
+        title: "Camera added successfully",
+        description: "Capturing frame for zone drawing...",
+      });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Cannot connect to camera';
+      toast({
+        title: "Failed to add camera",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const captureFrame = async (cameraId: string) => {
+    try {
+      const response = await apiRequest('GET', `/api/cameras/${cameraId}/frame`);
+      const data = await response.json();
+      setCapturedFrame(data.frameData);
+    } catch (error) {
+      toast({
+        title: "Failed to capture frame",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -102,6 +151,23 @@ export default function Setup() {
     if (videoFile) {
       uploadMutation.mutate(videoFile);
     }
+  };
+
+  const handleAddCamera = () => {
+    if (!cameraName || !streamUrl) {
+      toast({
+        title: "Missing information",
+        description: "Please provide camera name and stream URL",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    addCameraMutation.mutate({
+      name: cameraName,
+      streamUrl: streamUrl,
+      sourceType: streamType,
+    });
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -174,12 +240,27 @@ export default function Setup() {
   useEffect(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas) return;
+    if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const drawFrame = () => {
+      // If we have a captured frame (from camera), draw that
+      if (capturedFrame) {
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          drawPolygons(ctx, canvas);
+        };
+        img.src = capturedFrame;
+        return;
+      }
+
+      // Otherwise draw from video element
+      if (!video) return;
       // Only draw when we have current frame data
       if (video.readyState < 2 || video.videoWidth === 0) return;
 
@@ -187,7 +268,10 @@ export default function Setup() {
       canvas.height = video.videoHeight;
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      drawPolygons(ctx, canvas);
+    };
 
+    const drawPolygons = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
       // Draw saved polygons (filled with semi-transparent color)
       polygons.forEach((polygon, i) => {
         const color = colors[i % colors.length];
@@ -255,7 +339,7 @@ export default function Setup() {
 
     const interval = setInterval(drawFrame, 100);
     return () => clearInterval(interval);
-  }, [polygons, currentPolygon]);
+  }, [polygons, currentPolygon, capturedFrame]);
 
   // When a new video is uploaded, force the hidden video element to load metadata
   // so videoWidth/videoHeight become available for canvas drawing and draw once on load
@@ -340,38 +424,103 @@ export default function Setup() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Step 1: Upload Video</CardTitle>
-            <CardDescription>Upload a video file of your queue area</CardDescription>
+            <CardTitle>Step 1: Add Video Source</CardTitle>
+            <CardDescription>Upload a video file or connect to a live camera</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center hover-elevate">
-              <input
-                type="file"
-                accept="video/*"
-                onChange={handleFileChange}
-                className="hidden"
-                id="video-upload"
-                data-testid="input-video-file"
-              />
-              <label htmlFor="video-upload" className="cursor-pointer">
-                <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  {videoFile ? videoFile.name : 'Click to select video file'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Supported formats: MP4, AVI, MOV, MKV, WebM
-                </p>
-              </label>
-            </div>
-            <Button
-              onClick={handleUpload}
-              disabled={!videoFile || uploadMutation.isPending}
-              className="w-full hover-elevate active-elevate-2"
-              data-testid="button-upload-video"
-            >
-              {uploadMutation.isPending ? 'Uploading...' : 'Upload Video'}
-            </Button>
-            {uploadedVideo && (
+            <Tabs defaultValue="video" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="video">
+                  <VideoIcon className="w-4 h-4 mr-2" />
+                  Video File
+                </TabsTrigger>
+                <TabsTrigger value="camera">
+                  <Camera className="w-4 h-4 mr-2" />
+                  Live Camera
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="video" className="space-y-4">
+                <div className="border-2 border-dashed rounded-lg p-8 text-center hover-elevate">
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="video-upload"
+                    data-testid="input-video-file"
+                  />
+                  <label htmlFor="video-upload" className="cursor-pointer">
+                    <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {videoFile ? videoFile.name : 'Click to select video file'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Supported formats: MP4, AVI, MOV, MKV, WebM
+                    </p>
+                  </label>
+                </div>
+                <Button
+                  onClick={handleUpload}
+                  disabled={!videoFile || uploadMutation.isPending}
+                  className="w-full hover-elevate active-elevate-2"
+                  data-testid="button-upload-video"
+                >
+                  {uploadMutation.isPending ? 'Uploading...' : 'Upload Video'}
+                </Button>
+              </TabsContent>
+              
+              <TabsContent value="camera" className="space-y-4">
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="camera-name">Camera Name</Label>
+                    <Input
+                      id="camera-name"
+                      placeholder="e.g., Main Entrance"
+                      value={cameraName}
+                      onChange={(e) => setCameraName(e.target.value)}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="stream-type">Stream Type</Label>
+                    <Select value={streamType} onValueChange={setStreamType}>
+                      <SelectTrigger id="stream-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="rtsp">RTSP</SelectItem>
+                        <SelectItem value="http">HTTP/MJPEG</SelectItem>
+                        <SelectItem value="webcam">Webcam</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="stream-url">Stream URL</Label>
+                    <Input
+                      id="stream-url"
+                      placeholder={streamType === 'rtsp' ? 'rtsp://username:password@ip:port/stream' : streamType === 'webcam' ? '0 (device index)' : 'http://ip:port/stream'}
+                      value={streamUrl}
+                      onChange={(e) => setStreamUrl(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {streamType === 'rtsp' && 'Example: rtsp://admin:password@192.168.1.100:554/stream1'}
+                      {streamType === 'http' && 'Example: http://192.168.1.100:8080/video'}
+                      {streamType === 'webcam' && 'Enter device index (usually 0 for default webcam)'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleAddCamera}
+                  disabled={addCameraMutation.isPending}
+                  className="w-full hover-elevate active-elevate-2"
+                >
+                  {addCameraMutation.isPending ? 'Connecting...' : 'Add Camera'}
+                </Button>
+              </TabsContent>
+            </Tabs>
+            {uploadedVideo && uploadedVideo.sourceType === 'file' && (
               <video
                 ref={videoRef}
                 src={`/uploads/${uploadedVideo.filename}`}
