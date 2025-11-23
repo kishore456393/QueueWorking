@@ -81,38 +81,71 @@ An intelligent real-time queue monitoring and management system that uses AI to 
 
 ### Prerequisites
 
-- **Node.js** 18+ 
-- **Python** 3.8+
-- **FFmpeg** (for video processing)
+- **Node.js** 18+ - [Download](https://nodejs.org/)
+- **Python** 3.8+ - [Download](https://www.python.org/downloads/)
+- **FFmpeg** - [Download](https://ffmpeg.org/download.html)
 
-### Installation
+### Quick Installation (Automated)
 
-1. **Clone the repository:**
+**Windows:**
+```powershell
+# Clone the repository
+git clone https://github.com/kishore456393/QueueWorking.git
+cd QueueWorking
+
+# Run automated setup
+.\setup.ps1
+
+# Start the application
+.\start-servers.ps1
+```
+
+**Linux/Mac:**
+```bash
+# Clone the repository
+git clone https://github.com/kishore456393/QueueWorking.git
+cd QueueWorking
+
+# Run automated setup
+chmod +x setup.sh
+./setup.sh
+
+# Start the application
+./start.sh
+```
+
+### Manual Installation
+
+**1. Clone the repository:**
 ```bash
 git clone https://github.com/kishore456393/QueueWorking.git
 cd QueueWorking
 ```
 
-2. **Install Node.js dependencies:**
+**2. Install Node.js dependencies:**
 ```bash
 npm install
 ```
 
-3. **Install Python dependencies:**
+**3. Install Python dependencies:**
 ```bash
-pip install -r detector/requirements.txt
+cd detector
+python -m venv venv
+
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+pip install -r requirements.txt
+cd ..
 ```
 
-4. **Download YOLO model:**
-The YOLOv8 model is included in the repository. If needed, it will download automatically on first run.
-
-### Running the Application
-
-**Option 1: Using Start Scripts (Recommended)**
+**4. Run the application:**
 
 **Windows:**
-```bash
-start-servers.ps1
+```powershell
+.\start-servers.ps1
 ```
 
 **Linux/Mac:**
@@ -121,23 +154,16 @@ chmod +x start.sh
 ./start.sh
 ```
 
-**Option 2: Manual Start**
-
-**Terminal 1 - Backend Server:**
-```bash
-npm run dev
-```
-
-**Terminal 2 - Python Detector:**
-```bash
-cd detector
-python main.py
-```
-
 **Access the application:**
 - Frontend: http://localhost:5000
 - Backend API: http://localhost:5000/api
 - Python Detector: http://localhost:8000
+
+## 📖 Full Documentation
+
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete deployment guide for fresh installations
+- **[PRIVACY.md](PRIVACY.md)** - Privacy and GDPR compliance documentation
+- **[SETUP.md](SETUP.md)** - Detailed setup instructions
 
 ## 📖 Usage Guide
 
