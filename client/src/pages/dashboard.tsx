@@ -14,6 +14,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { t, type Language } from "@/lib/translations";
 import { playTextToSpeech } from "@/lib/tts";
+import { QRCodeGenerator } from "@/components/qr-code-generator";
 
 const LANGUAGES = {
   'en': '🇬🇧 English',
@@ -120,7 +121,12 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    const ws = new WebSocket(`ws://${window.location.host}/ws`);
+    // Use wss:// for HTTPS connections, ws:// for HTTP
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    console.log('Connecting to WebSocket:', wsUrl);
+    
+    const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
       console.log('WebSocket connected');
@@ -293,6 +299,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-2 items-center">
+          <QRCodeGenerator />
           <Badge variant={wsConnected ? "default" : "destructive"} data-testid="badge-websocket-status">
             {wsConnected ? `🟢 ${t(selectedLanguage as Language, 'live')}` : `🔴 ${t(selectedLanguage as Language, 'offline')}`}
           </Badge>

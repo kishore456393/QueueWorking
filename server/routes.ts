@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
+import os from "os";
 import { storage } from "./storage";
 import { insertVideoSchema, insertQueueZoneSchema, insertDetectionSnapshotSchema, insertSettingsSchema } from "@shared/schema";
 import { startMockDetection, stopMockDetection, isDetectionRunning, setUpdateCallback } from "./detection-mock";
@@ -346,6 +347,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ running: isDetectionRunning() || isYoloRunning() });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get network IP address for QR code generation
+  app.get('/api/network-ip', (req, res) => {
+    try {
+      const networkInterfaces = os.networkInterfaces();
+      const addresses: string[] = [];
+      
+      // Find all non-internal IPv4 addresses
+      for (const interfaceName in networkInterfaces) {
+        const interfaces = networkInterfaces[interfaceName];
+        if (!interfaces) continue;
+        
+        for (const iface of interfaces) {
+          // Skip internal (loopback) and non-IPv4 addresses
+          if (iface.family === 'IPv4' && !iface.internal) {
+            addresses.push(iface.address);
+          }
+        }
+      }
+      
+      // Return the first valid address or localhost as fallback
+      const ipAddress = addresses[0] || 'localhost';
+      const port = parseInt(process.env.PORT || '5000', 10);
+      
+      res.json({ 
+        ip: ipAddress,
+        port: port,
+        url: `http://${ipAddress}:${port}`,
+        allAddresses: addresses
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Proxy endpoint to fetch Ngrok tunnels (avoids CORS issues)
+  app.get('/api/ngrok-tunnels', async (req, res) => {
+    try {
+      const response = await fetch('http://127.0.0.1:4040/api/tunnels');
+      const data = await response.json();
+      res.json(data);
+    } catch (error: any) {
+      console.log('Ngrok API not accessible:', error.message);
+      res.status(503).json({ 
+        error: 'Ngrok not running',
+        tunnels: []
+      });
     }
   });
 

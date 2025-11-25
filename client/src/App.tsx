@@ -1,4 +1,4 @@
-import { Switch, Route, Link } from "wouter";
+import { Switch, Route, Link, useRoute } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -15,6 +15,18 @@ import Analytics from "@/pages/analytics";
 import NotFound from "@/pages/not-found";
 
 function Router() {
+  const [isMobileLive] = useRoute("/mobile-live");
+
+  // Mobile-only view without header/footer
+  if (isMobileLive) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Dashboard />
+      </div>
+    );
+  }
+
+  // Desktop view with full navigation
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-border bg-card sticky top-0 z-50">

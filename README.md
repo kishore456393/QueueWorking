@@ -1,93 +1,238 @@
-# 🎯 AI Queue Detection & Management System
+# 🎯 QueueGuidance - AI Queue Detection & Management System
 
-An intelligent real-time queue monitoring and management system that uses AI to detect people in queues, provide smart recommendations, and announce queue status in multiple languages.
+An intelligent real-time queue monitoring and management system powered by AI that detects people in queues, provides smart recommendations, and announces queue status in multiple languages with worldwide mobile access.
 
-## ✨ Features
+## ✨ Key Features
 
 ### 🤖 AI-Powered Detection
 - **YOLOv8 Person Detection**: Real-time person detection using state-of-the-art deep learning
 - **Multi-Queue Support**: Monitor multiple queues simultaneously with custom zone definitions
-- **Smart Recommendations**: Intelligent queue suggestions based on:
-  - Queue length differences
-  - Predicted wait time savings (2 min per person)
-  - Physical proximity between queues
+- **Smart Recommendations**: AI-powered queue suggestions based on length and wait time
 
 ### 🗣️ Multi-Language Audio Announcements
-- **10 Languages Supported**: English, Hindi, Tamil, Telugu, Bengali, Marathi, Gujarati, Kannada, Malayalam, Punjabi
-- **Google TTS Integration**: Reliable, high-quality text-to-speech
-- **Male Voice**: Optimized for clear public announcements
-- **Configurable Intervals**: Set custom announcement frequency (default: 30 seconds)
-- **Smart Overlap Prevention**: Prevents multiple announcements from playing simultaneously
+- **10 Languages**: English, Hindi, Tamil, Telugu, Bengali, Marathi, Gujarati, Kannada, Malayalam, Punjabi
+- **Google TTS**: High-quality text-to-speech with male voice optimized for public announcements
+- **Configurable**: Set custom announcement intervals with overlap prevention
+
+### 📱 Universal Mobile Access
+- **QR Code Generation**: Instant mobile access via scannable QR codes
+- **Local Network**: Access from any device on the same WiFi
+- **Public Internet**: Worldwide access via Ngrok with automatic QR code integration
+- **No App Required**: Works in any mobile browser
 
 ### 📊 Real-Time Dashboard
-- **Live Queue Monitoring**: See real-time people count in each queue
-- **Visual Analytics**: Bar charts and trend visualization
-- **Annotated Video Feed**: Visual representation of detected persons and queue zones
-- **Language Switching**: Instantly switch dashboard language
-- **Queue Recommendations**: See which queue is fastest and time savings
+- Live queue monitoring with visual analytics
+- WebSocket-powered instant updates
+- Annotated video feed with zone visualization
+- Dark/Light mode support
 
 ### 🔒 Privacy & Compliance
-- **Auto-Cleanup**: Detection data automatically deleted after 1 hour
-- **GDPR Compliant**: Full privacy protection and data retention policies
-- **Edge Computing**: Video processing happens locally on your server
-- **No Cloud Storage**: All data processed and stored locally
-
-### 🎨 User Interface
-- **Modern Design**: Clean, intuitive interface built with React and Tailwind CSS
-- **Responsive**: Works on desktop, tablet, and mobile devices
-- **Dark/Light Mode Support**: Comfortable viewing in any environment
-- **Real-Time Updates**: Live data refresh with configurable intervals
-
-## 🏗️ Architecture
-
-### Technology Stack
-
-**Frontend:**
-- React 18 + TypeScript
-- Vite for fast development
-- TanStack Query for data management
-- Recharts for analytics visualization
-- Shadcn/ui components
-- Tailwind CSS for styling
-
-**Backend:**
-- Node.js + Express
-- TypeScript
-- SQLite database with Drizzle ORM
-- WebSocket support for real-time updates
-
-**AI/ML:**
-- Python FastAPI server
-- YOLOv8 (Ultralytics) for person detection
-- OpenCV for video processing
-- Google TTS (gTTS) for speech synthesis
-
-### Algorithms Used
-
-**AI Algorithms:**
-1. **YOLOv8 CNN** - Real-time person detection from video frames
-2. **Neural TTS** - Google's text-to-speech synthesis
-
-**Classical Algorithms:**
-1. **Ray Casting** - Point-in-polygon detection for zone assignment
-2. **Centroid Calculation** - Finding center point of queue polygons
-3. **Euclidean Distance** - Calculating proximity between queues
-4. **Multi-factor Recommendation** - Smart queue suggestions
-5. **Bounding Box Center** - Calculating person position
-6. **Interval Scheduling** - Periodic detection and announcements
-7. **Auto-cleanup** - Privacy-compliant data retention
+- Auto-cleanup: Data deleted after 1 hour
+- GDPR compliant with local processing
+- No cloud storage required
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - **Node.js** 18+ - [Download](https://nodejs.org/)
-- **Python** 3.8+ - [Download](https://www.python.org/downloads/)
-- **FFmpeg** - [Download](https://ffmpeg.org/download.html)
+- **Python** 3.8+ - [Download](https://python.org/downloads/)
+- **Ngrok** (optional) - For internet access
 
-### Quick Installation (Automated)
+### Installation
 
-**Windows:**
+1. **Clone repository:**
+```bash
+git clone https://github.com/kishore456393/QueueWorking.git
+cd QueueWorking
+```
+
+2. **Install Node.js dependencies:**
+```bash
+npm install
+```
+
+3. **Install Python dependencies:**
+```bash
+cd detector
+pip install -r requirements.txt
+cd ..
+```
+
+4. **Start the application:**
+```bash
+start-all.bat  # Automatically starts Backend, Python Detector, and Ngrok
+```
+
+5. **Access the application:**
+- Web Interface: http://localhost:5000
+- Dashboard: http://localhost:5000/dashboard
+- Ngrok Dashboard: http://127.0.0.1:4040 (to get public URL)
+
+## 📖 Usage Guide
+
+### 1. Setup Queue Zones
+
+1. Go to **Setup** page
+2. Upload video or use live camera feed
+3. Draw queue zones by clicking on the video
+4. Save zones
+
+### 2. Start Detection
+
+1. Navigate to **Dashboard**
+2. Select video/camera feed
+3. Click "Start Detection"
+4. View real-time queue counts
+
+### 3. Mobile Access
+
+**Local Network (Same WiFi):**
+1. Click **"Show QR Code"** in Dashboard
+2. Toggle to "Local Network" mode
+3. Scan QR code with mobile device
+4. View live updates on mobile
+
+**Internet Access (Any Network):**
+1. Run `start-all.bat` (includes Ngrok)
+2. Click **"Show QR Code"** in Dashboard  
+3. Ngrok URL detected automatically
+4. Toggle to "Public URL" mode
+5. Scan QR code from anywhere in the world!
+
+### 4. Configure Settings
+
+- **Language**: Choose from 10 languages
+- **Audio Announcements**: Enable voice announcements
+- **Intervals**: Set detection and audio frequency
+- **Confidence**: Adjust AI detection sensitivity
+
+## 🌐 Internet Deployment
+
+The system includes built-in Ngrok support for worldwide access:
+
+1. **Get Ngrok Auth Token**: Visit [dashboard.ngrok.com](https://dashboard.ngrok.com)
+2. **Configure Ngrok**: Run `start-all.bat` (will prompt if not configured)
+3. **Auto-Detection**: QR code automatically shows public URL
+4. **Share Access**: Anyone can scan QR code from anywhere
+
+**Features:**
+- ✅ Automatic Ngrok tunnel startup
+- ✅ Public URL auto-detection in QR code
+- ✅ Toggle between local and public URLs
+- ✅ Secure WSS (WebSocket Secure) for HTTPS
+
+## 🏗️ Technology Stack
+
+**Frontend:**
+- React 18 + TypeScript
+- Vite, TanStack Query
+- Shadcn/ui + Tailwind CSS
+- WebSocket for real-time updates
+
+**Backend:**
+- Node.js + Express + TypeScript
+- SQLite with Drizzle ORM
+- WebSocket support
+
+**AI/ML:**
+- Python FastAPI
+- YOLOv8 (Ultralytics)
+- OpenCV + Google TTS
+
+**Deployment:**
+- Ngrok for public tunneling
+- Automated batch scripts
+
+## 📊 API Endpoints
+
+### Backend (Port 5000)
+
+- `GET /api/videos` - List videos
+- `POST /api/videos` - Upload video
+- `POST /api/detection/start` - Start detection
+- `POST /api/detection/stop` - Stop detection
+- `GET /api/detection/latest` - Latest snapshot
+- `GET /api/network-ip` - Get network IP
+- `GET /api/ngrok-tunnels` - Get Ngrok URL
+
+### Python Detector (Port 8000)
+
+- `POST /detect` - Run YOLOv8 detection
+- `POST /tts` - Generate speech audio
+
+## 🎯 Use Cases
+
+- 🏪 **Retail**: Checkout queue management
+- 🏦 **Banks**: Customer service optimization  
+- ✈️ **Airports**: Security line monitoring
+- 🏥 **Hospitals**: Patient waiting areas
+- 🎢 **Theme Parks**: Attraction queue times
+- 🏛️ **Government**: Public service counters
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```env
+PORT=5000
+DATABASE_URL=./database.db
+DETECTOR_PORT=8000
+DATA_RETENTION_HOURS=1
+```
+
+### Settings (via Dashboard)
+
+- Detection interval: 2-10 seconds
+- Audio interval: 10-60 seconds  
+- Language selection
+- Confidence threshold: 0.04-0.10
+
+## 🐛 Troubleshooting
+
+**Ngrok not detected:**
+- Check `start-all.bat` terminal for Ngrok status
+- Visit http://127.0.0.1:4040 to verify tunnel
+- Click "Refresh" in QR code dialog
+
+**Mobile access not working:**
+- Ensure Ngrok is running
+- Click "Visit Site" on Ngrok warning page
+- Check firewall settings
+
+**WebSocket errors:**
+- System auto-detects ws:// vs wss://
+- Check browser console for errors
+- Verify ports 5000 and 8000 are open
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create feature branch
+3. Commit changes
+4. Submit pull request
+
+## 📝 License
+
+MIT License - see LICENSE file
+
+## 🙏 Acknowledgments
+
+- Ultralytics YOLOv8
+- Google TTS
+- OpenCV
+- React + Shadcn/ui
+
+## 📧 Contact
+
+**Maintainer:** kishore456393  
+**Repository:** [github.com/kishore456393/QueueWorking](https://github.com/kishore456393/QueueWorking)
+
+---
+
+Made with ❤️ for smarter queue management
 ```powershell
 # Clone the repository
 git clone https://github.com/kishore456393/QueueWorking.git
@@ -194,6 +339,51 @@ chmod +x start.sh
 2. View historical queue data
 3. Analyze trends and patterns
 4. Export data for further analysis
+
+### 5. Access on Mobile Device
+
+1. **Ensure both devices are on the same WiFi network**
+2. In Dashboard, click **"Show QR Code"** button
+3. Scan the QR code with your phone's camera
+4. Tap the notification to open mobile dashboard
+5. View live updates on your mobile device
+
+**Troubleshooting Mobile Access:**
+- Make sure your phone and computer are on the same WiFi network
+- Check your firewall isn't blocking port 5000
+- The QR code shows your network IP (e.g., 192.168.1.x:5000)
+- You can also manually type the URL shown in the QR dialog
+- **For internet access from any device:** See [INTERNET-DEPLOYMENT.md](INTERNET-DEPLOYMENT.md)
+
+## 🌐 Deploy to Internet
+
+Want to access from anywhere, not just your local WiFi?
+
+See the complete guide: **[INTERNET-DEPLOYMENT.md](INTERNET-DEPLOYMENT.md)**
+
+**Quick options:**
+- **Ngrok** (5 minutes) - Free, instant public URL
+- **Cloudflare Tunnel** (Free forever) - Permanent URL
+- **VPS Hosting** ($5/month) - Professional 24/7 deployment
+
+With internet deployment, anyone can scan the QR code from anywhere in the world! 🌍
+
+### 5. Mobile Access via QR Code
+
+1. In **Dashboard**, click "Show QR Code" button
+2. A QR code will appear with the mobile dashboard URL
+3. Scan the QR code with any mobile device
+4. Mobile live dashboard opens instantly in browser
+5. View real-time queue updates on mobile
+6. No app installation required!
+
+**Mobile Features:**
+- ✅ Auto-refresh every 2 seconds
+- ✅ Mobile-optimized interface
+- ✅ Language selection
+- ✅ Visual queue status indicators
+- ✅ Wait time estimates
+- ✅ Best queue recommendations
 
 ## 🎯 Use Cases
 

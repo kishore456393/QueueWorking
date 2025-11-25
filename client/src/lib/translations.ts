@@ -56,6 +56,12 @@ export const translations = {
     automaticAnnounce: "Automatically announce queue updates",
     refreshNow: "Refresh Now",
     
+    // Mobile live dashboard
+    waitingForData: "Waiting for detection data...",
+    fastestQueue: "Fastest Queue",
+    allQueues: "All Queues",
+    peopleInQueues: "across {count} queues",
+    
     // Announcements
     announcement: (bestQueue: number, worstQueue: number, bestCount: number, worstCount: number) =>
       `Queue ${bestQueue} is the fastest with ${bestCount} ${bestCount === 1 ? 'person' : 'people'}. People waiting in queue ${worstQueue}, which has ${worstCount} ${worstCount === 1 ? 'person' : 'people'}, can move to queue ${bestQueue} for faster service.`,
