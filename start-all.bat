@@ -4,13 +4,11 @@ title Queue Detection System - Starting All Services
 color 0A
 
 echo.
-echo  ╔═══════════════════════════════════════════════════════════════╗
-echo  ║                                                               ║
-echo  ║        QUEUE DETECTION SYSTEM - FULL STARTUP                  ║
-echo  ║                                                               ║
-echo  ║        Starting Backend + Frontend + Python Detector          ║
-echo  ║                                                               ║
-echo  ╚═══════════════════════════════════════════════════════════════╝
+echo  ===============================================================
+echo          QUEUE DETECTION SYSTEM - FULL STARTUP
+echo.
+echo          Starting Backend + Frontend + Python Detector
+echo  ===============================================================
 echo.
 
 REM Check if running from correct directory
@@ -33,7 +31,7 @@ for /f "tokens=5" %%a in ('netstat -aon ^| find ":8000" ^| find "LISTENING"') do
     echo   - Killing process on port 8000 (PID: %%a)
     taskkill /F /PID %%a >nul 2>&1
 )
-echo   ✓ Ports cleared
+echo   [OK] Ports cleared
 echo.
 
 REM Check Node.js installation
@@ -48,7 +46,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 for /f "tokens=*" %%v in ('node --version') do set NODE_VERSION=%%v
-echo   ✓ Node.js !NODE_VERSION! detected
+echo   [OK] Node.js !NODE_VERSION! detected
 echo.
 
 REM Check Python installation
@@ -63,7 +61,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 for /f "tokens=*" %%v in ('python --version') do set PYTHON_VERSION=%%v
-echo   ✓ !PYTHON_VERSION! detected
+echo   [OK] !PYTHON_VERSION! detected
 echo.
 
 REM Check if node_modules exists
@@ -76,105 +74,103 @@ if not exist "node_modules" (
         pause
         exit /b 1
     )
-    echo   ✓ Dependencies installed
+    echo   [OK] Dependencies installed
     echo.
 )
 
 REM Start Node.js backend server
-echo ═══════════════════════════════════════════════════════════════
+echo ---------------------------------------------------------------
 echo [1/3] STARTING NODE.JS BACKEND + FRONTEND SERVER
-echo ═══════════════════════════════════════════════════════════════
+echo ---------------------------------------------------------------
 echo   Port: 5000
 echo   Opening in new window...
 start "Queue System - Backend Server" cmd /k "color 0B && title Queue System - Backend Server && npm run dev"
 timeout /t 3 /nobreak >nul
-echo   ✓ Backend server started
+echo   [OK] Backend server started
 echo.
 
 REM Start Python detector
-echo ═══════════════════════════════════════════════════════════════
+echo ---------------------------------------------------------------
 echo [2/3] STARTING PYTHON DETECTION ENGINE
-echo ═══════════════════════════════════════════════════════════════
+echo ---------------------------------------------------------------
 echo   Port: 8000
 echo   Opening in new window...
 start "Queue System - Python Detector" cmd /k "color 0E && title Queue System - Python Detector && cd detector && python main.py"
 timeout /t 5 /nobreak >nul
-echo   ✓ Detection engine started
+echo   [OK] Detection engine started
 echo.
 
 REM Wait for servers to initialize
 echo [WAIT] Initializing all services...
 timeout /t 5 /nobreak >nul
-echo   ✓ Services initialized
+echo   [OK] Services initialized
 echo.
 
 REM Start Ngrok tunnel
-echo ═══════════════════════════════════════════════════════════════
+echo ---------------------------------------------------------------
 echo [3/4] STARTING NGROK TUNNEL
-echo ═══════════════════════════════════════════════════════════════
+echo ---------------------------------------------------------------
 echo   Checking for Ngrok...
 where ngrok >nul 2>&1
 if %errorlevel% equ 0 (
-    echo   ✓ Ngrok found, starting tunnel...
+    echo   [OK] Ngrok found, starting tunnel...
     start "Queue System - Ngrok Tunnel" cmd /k "color 0D && title Queue System - Ngrok Tunnel && ngrok http 5000"
     timeout /t 3 /nobreak >nul
-    echo   ✓ Ngrok tunnel started
+    echo   [OK] Ngrok tunnel started
     echo   Visit http://127.0.0.1:4040 to see your public URL
 echo.
 ) else (
-    echo   ⚠ Ngrok not found - skipping tunnel
+    echo   [WARN] Ngrok not found - skipping tunnel
     echo   Run setup-ngrok.bat to install Ngrok for internet access
     echo.
 )
 
 REM Open web application
-echo ═══════════════════════════════════════════════════════════════
+echo ---------------------------------------------------------------
 echo [4/4] LAUNCHING WEB APPLICATION
-echo ═══════════════════════════════════════════════════════════════
+echo ---------------------------------------------------------------
 start http://localhost:5000
-echo   ✓ Browser opened
+echo   [OK] Browser opened
 echo.
 
 REM Display success information
 color 0A
 echo.
-echo  ╔═══════════════════════════════════════════════════════════════╗
-echo  ║                                                               ║
-echo  ║                  ✓ ALL SYSTEMS OPERATIONAL                    ║
-echo  ║                                                               ║
-echo  ╚═══════════════════════════════════════════════════════════════╝
+echo  ===============================================================
+echo                   [OK] ALL SYSTEMS OPERATIONAL
+echo  ===============================================================
 echo.
-echo  📊 SYSTEM URLS:
-echo  ════════════════════════════════════════════════════════════════
+echo  SYSTEM URLS:
+echo  ----------------------------------------------------------------
 echo    • Web Interface:     http://localhost:5000
 echo    • Backend API:       http://localhost:5000/api
 echo    • Python Detector:   http://localhost:8000
 echo    • Mobile Dashboard:  http://localhost:5000/mobile-live
 echo    • Ngrok Dashboard:   http://127.0.0.1:4040
 echo.
-echo  🌍 INTERNET ACCESS:
-echo  ════════════════════════════════════════════════════════════════
+echo  INTERNET ACCESS:
+echo  ----------------------------------------------------------------
 where ngrok >nul 2>&1
 if %errorlevel% equ 0 (
-    echo    ✓ Ngrok tunnel is running!
+    echo    [OK] Ngrok tunnel is running!
     echo    Open http://127.0.0.1:4040 to see your public URL
     echo    Share the public URL to access from anywhere
 ) else (
-    echo    ⚠ Ngrok not installed
+    echo    [WARN] Ngrok not installed
     echo    Run setup-ngrok.bat to enable internet access
 )
 echo.
-echo  🔧 QUICK ACTIONS:
-echo  ════════════════════════════════════════════════════════════════
+echo  QUICK ACTIONS:
+echo  ----------------------------------------------------------------
 echo    • To stop servers:   Run stop.bat or close terminal windows
 echo    • To restart:        Run this script again
 echo    • View public URL:   Open http://127.0.0.1:4040
 echo.
-echo  💡 TIP: Generate QR code in dashboard - it will auto-detect
+echo  TIP: Generate QR code in dashboard - it will auto-detect
 echo      your Ngrok URL for worldwide mobile access!
 echo.
-echo  ════════════════════════════════════════════════════════════════
+echo  ----------------------------------------------------------------
 echo  Press any key to close this launcher...
 echo  (Servers will continue running in separate windows)
-echo  ════════════════════════════════════════════════════════════════
+echo  ----------------------------------------------------------------
 pause >nul
