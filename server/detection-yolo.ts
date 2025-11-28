@@ -2,6 +2,7 @@ import { storage } from "./storage";
 import { spawn } from "child_process";
 import ffmpegPath from "ffmpeg-static";
 import { randomUUID } from "crypto";
+import { captureStreamFrame } from "./stream-capture";
 
 let detectionInterval: NodeJS.Timeout | null = null;
 let currentVideoId: string | null = null;
@@ -78,19 +79,32 @@ export async function startYoloDetection(params: { videoId: string; updateInterv
 
   detectionInterval = setInterval(async () => {
     try {
-      const frame = await extractFrameJpeg(video.filepath, currentSecond);
-      currentSecond += Math.max(1, Math.floor(updateInterval / 1000));
-      const b64 = frame.toString("base64");
+      let b64: string;
+
+      if (video.sourceType === 'file') {
+        const frame = await extractFrameJpeg(video.filepath, currentSecond);
+        currentSecond += Math.max(1, Math.floor(updateInterval / 1000));
+        b64 = frame.toString("base64");
+      } else {
+        // Live stream (camera, rtsp, http)
+        // Use the streamUrl if available, otherwise fallback to filepath (which stores the URL/index)
+        const source = video.streamUrl || video.filepath;
+        const frameDataUrl = await captureStreamFrame(source);
+        // Remove data:image/jpeg;base64, prefix if present
+        b64 = frameDataUrl.replace(/^data:image\/[a-z]+;base64,/, "");
+      }
+
       const polygons = zones
         .sort((a, b) => a.queueNumber - b.queueNumber)
         .map((z) => z.polygonPoints as Array<{ x: number; y: number }>);
+
       const detectionResult = await postToDetector(b64, polygons);
       const counts = detectionResult.counts;
       const totalPeople = counts.reduce((s, c) => s + c, 0);
-      
+
       // Enhanced recommendation algorithm
       const recommendation = calculateSmartRecommendation(counts, zones);
-      
+
       const snapshot = await storage.createDetectionSnapshot({
         videoId,
         totalQueues: counts.length,
@@ -130,23 +144,23 @@ function calculateSmartRecommendation(
   const worstIdx = counts.indexOf(Math.max(...counts));
   const bestCount = counts[bestIdx];
   const worstCount = counts[worstIdx];
-  
+
   // Calculate queue length difference
   const lengthDifference = worstCount - bestCount;
-  
+
   // Calculate predicted wait time savings (assuming 2 minutes per person)
   const waitTimeSavings = lengthDifference * 2;
-  
+
   // Calculate proximity (distance between queue centroids)
   const proximity = calculateQueueProximity(
     zones[worstIdx].polygonPoints,
     zones[bestIdx].polygonPoints
   );
-  
+
   // Determine if recommendation is worthwhile
   // Only recommend if difference is significant enough (at least 2 people or 4+ min savings)
   const isWorthRecommending = lengthDifference >= 2 || waitTimeSavings >= 4;
-  
+
   let message: string;
   if (isWorthRecommending) {
     const distanceDesc = proximity < 50 ? "nearby" : proximity < 150 ? "close" : "alternative";
@@ -156,7 +170,7 @@ function calculateSmartRecommendation(
   } else {
     message = `All queues are balanced. Queue ${bestIdx + 1} is fastest with ${bestCount} ${bestCount === 1 ? 'person' : 'people'} waiting.`;
   }
-  
+
   return {
     bestQueue: bestIdx + 1,
     worstQueue: worstIdx + 1,
@@ -175,7 +189,7 @@ function calculateQueueProximity(
   // Calculate centroid of each polygon
   const centroid1 = calculateCentroid(polygon1);
   const centroid2 = calculateCentroid(polygon2);
-  
+
   // Calculate Euclidean distance
   const dx = centroid2.x - centroid1.x;
   const dy = centroid2.y - centroid1.y;

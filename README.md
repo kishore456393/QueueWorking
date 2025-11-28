@@ -1,87 +1,5 @@
 # 🎯 QueueGuidance - AI Queue Detection & Management System
 
-An intelligent real-time queue monitoring and management system powered by AI that detects people in queues, provides smart recommendations, and announces queue status in multiple languages with worldwide mobile access.
-
-## ✨ Key Features
-
-### 🤖 AI-Powered Detection
-- **YOLOv8 Person Detection**: Real-time person detection using state-of-the-art deep learning
-- **Multi-Queue Support**: Monitor multiple queues simultaneously with custom zone definitions
-- **Smart Recommendations**: AI-powered queue suggestions based on length and wait time
-
-### 🗣️ Multi-Language Audio Announcements
-- **10 Languages**: English, Hindi, Tamil, Telugu, Bengali, Marathi, Gujarati, Kannada, Malayalam, Punjabi
-- **Google TTS**: High-quality text-to-speech with male voice optimized for public announcements
-- **Configurable**: Set custom announcement intervals with overlap prevention
-
-### 📱 Universal Mobile Access
-- **QR Code Generation**: Instant mobile access via scannable QR codes
-- **Local Network**: Access from any device on the same WiFi
-- **Public Internet**: Worldwide access via Ngrok with automatic QR code integration
-- **No App Required**: Works in any mobile browser
-
-### 📊 Real-Time Dashboard
-- Live queue monitoring with visual analytics
-- WebSocket-powered instant updates
-- Annotated video feed with zone visualization
-- Dark/Light mode support
-
-### 🔒 Privacy & Compliance
-- Auto-cleanup: Data deleted after 1 hour
-- GDPR compliant with local processing
-- No cloud storage required
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Node.js** 18+ - [Download](https://nodejs.org/)
-- **Python** 3.8+ - [Download](https://python.org/downloads/)
-- **Ngrok** (optional) - For internet access
-
-### Installation
-
-1. **Clone repository:**
-```bash
-git clone https://github.com/kishore456393/QueueWorking.git
-cd QueueWorking
-```
-
-2. **Install Node.js dependencies:**
-```bash
-npm install
-```
-
-3. **Install Python dependencies:**
-```bash
-cd detector
-pip install -r requirements.txt
-cd ..
-```
-
-4. **Start the application:**
-```bash
-start-all.bat  # Automatically starts Backend, Python Detector, and Ngrok
-```
-
-5. **Access the application:**
-- Web Interface: http://localhost:5000
-- Dashboard: http://localhost:5000/dashboard
-- Ngrok Dashboard: http://127.0.0.1:4040 (to get public URL)
-
-## 📖 Usage Guide
-
-### 1. Setup Queue Zones
-
-1. Go to **Setup** page
-2. Upload video or use live camera feed
-3. Draw queue zones by clicking on the video
-4. Save zones
-
-### 2. Start Detection
-
-1. Navigate to **Dashboard**
-2. Select video/camera feed
 3. Click "Start Detection"
 4. View real-time queue counts
 
@@ -204,6 +122,10 @@ DATA_RETENTION_HOURS=1
 - System auto-detects ws:// vs wss://
 - Check browser console for errors
 - Verify ports 5000 and 8000 are open
+
+**Live Camera Issues:**
+- **"Connecting..." hangs:** Ensure no other process is using the camera. Restart the app.
+- **Public Streams fail:** Many public RTSP/MJPEG streams are unreliable. Use a local webcam (Source `0`) or a video file for testing.
 
 ## 🤝 Contributing
 

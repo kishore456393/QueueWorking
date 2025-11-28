@@ -23,14 +23,14 @@ export function QRCodeGenerator() {
         const response = await fetch('/api/network-ip');
         const data = await response.json();
         setNetworkIP(data.ip);
-        const url = `http://${data.ip}:${data.port}/dashboard`;
+        const url = `http://${data.ip}:${data.port}/mobile-live`;
         setMobileUrl(url);
-        
+
         // Check if we're accessing via a public URL (ngrok, cloudflare, etc.)
         const currentHost = window.location.host;
         if (!currentHost.includes('localhost') && !currentHost.match(/^\d+\.\d+\.\d+\.\d+/)) {
           // We're on a public domain
-          const publicUrl = `${window.location.protocol}//${window.location.host}/dashboard`;
+          const publicUrl = `${window.location.protocol}//${window.location.host}/mobile-live`;
           setPublicUrl(publicUrl);
           setUsePublicUrl(true);
         } else {
@@ -42,7 +42,7 @@ export function QRCodeGenerator() {
               // Find HTTPS tunnel
               const httpsTunnel = ngrokData.tunnels.find((t: any) => t.proto === 'https');
               if (httpsTunnel) {
-                const ngrokUrl = `${httpsTunnel.public_url}/dashboard`;
+                const ngrokUrl = `${httpsTunnel.public_url}/mobile-live`;
                 setPublicUrl(ngrokUrl);
                 setUsePublicUrl(true); // Auto-select ngrok URL
                 console.log('✅ Ngrok URL detected and auto-selected:', ngrokUrl);
@@ -58,11 +58,11 @@ export function QRCodeGenerator() {
         // Fallback to current host
         const protocol = window.location.protocol;
         const host = window.location.host;
-        const url = `${protocol}//${host}/dashboard`;
+        const url = `${protocol}//${host}/mobile-live`;
         setMobileUrl(url);
       }
     };
-    
+
     fetchNetworkIP();
   }, []);
 
@@ -89,29 +89,29 @@ export function QRCodeGenerator() {
   const handleShowQR = async () => {
     setShowQR(true);
     setLoading(true);
-    
+
     // Fetch fresh ngrok URL via backend proxy
     try {
       console.log('🔍 Fetching Ngrok tunnels via /api/ngrok-tunnels');
       const ngrokResponse = await fetch('/api/ngrok-tunnels');
-      
+
       console.log('📡 Ngrok response status:', ngrokResponse.status);
-      
+
       if (!ngrokResponse.ok) {
         throw new Error(`Ngrok API returned status: ${ngrokResponse.status}`);
       }
-      
+
       const ngrokData = await ngrokResponse.json();
       console.log('📦 Ngrok data received:', ngrokData);
-      
+
       if (ngrokData.tunnels && ngrokData.tunnels.length > 0) {
         console.log('🔗 Found tunnels:', ngrokData.tunnels.length);
-        
+
         // Find HTTPS tunnel
         const httpsTunnel = ngrokData.tunnels.find((t: any) => t.proto === 'https');
-        
+
         if (httpsTunnel) {
-          const ngrokUrl = `${httpsTunnel.public_url}/dashboard`;
+          const ngrokUrl = `${httpsTunnel.public_url}/mobile-live`;
           setPublicUrl(ngrokUrl);
           setUsePublicUrl(true);
           console.log('✅ Ngrok HTTPS URL set:', ngrokUrl);
@@ -124,7 +124,7 @@ export function QRCodeGenerator() {
           // Try HTTP tunnel as fallback
           const httpTunnel = ngrokData.tunnels.find((t: any) => t.proto === 'http');
           if (httpTunnel) {
-            const ngrokUrl = `${httpTunnel.public_url}/dashboard`;
+            const ngrokUrl = `${httpTunnel.public_url}/mobile-live`;
             setPublicUrl(ngrokUrl);
             setUsePublicUrl(true);
             console.log('✅ Ngrok HTTP URL set:', ngrokUrl);
@@ -170,7 +170,7 @@ export function QRCodeGenerator() {
       </Button>
 
       <Dialog open={showQR} onOpenChange={setShowQR}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-sm bg-card border-border shadow-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Smartphone className="w-5 h-5" />
@@ -183,23 +183,23 @@ export function QRCodeGenerator() {
 
           <div className="space-y-4">
             {/* URL Type Selector - Always visible */}
-            <div className="flex gap-2 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+            <div className="flex gap-2 p-1 bg-muted/50 rounded-lg border border-border">
               <Button
                 size="sm"
-                variant={usePublicUrl ? "default" : "outline"}
+                variant={usePublicUrl ? "default" : "ghost"}
                 onClick={() => setUsePublicUrl(true)}
-                className="flex-1 font-semibold"
+                className="flex-1 font-medium h-8 text-xs"
                 disabled={!publicUrl}
               >
-                🌍 Public URL (Ngrok)
+                🌍 Public
               </Button>
               <Button
                 size="sm"
-                variant={!usePublicUrl ? "default" : "outline"}
+                variant={!usePublicUrl ? "default" : "ghost"}
                 onClick={() => setUsePublicUrl(false)}
-                className="flex-1 font-semibold"
+                className="flex-1 font-medium h-8 text-xs"
               >
-                📡 Local Network
+                📡 Local
               </Button>
             </div>
 
@@ -219,10 +219,10 @@ export function QRCodeGenerator() {
             )}
 
             {/* QR Code Display */}
-            <div className="bg-white p-6 rounded-lg flex items-center justify-center">
+            <div className="bg-white p-4 rounded-xl border border-border flex items-center justify-center shadow-sm">
               <QRCode
                 value={currentUrl}
-                size={256}
+                size={180}
                 level="H"
                 style={{ height: "auto", maxWidth: "100%", width: "100%" }}
               />
@@ -263,62 +263,12 @@ export function QRCodeGenerator() {
             </div>
 
             {/* Instructions */}
-            <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-              <CardContent className="p-4">
-                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                  <Smartphone className="w-4 h-4" />
-                  How to Use:
-                </h4>
-                {usePublicUrl ? (
-                  <ol className="text-sm space-y-1 text-muted-foreground list-decimal list-inside">
-                    <li>Open camera or QR scanner on any phone</li>
-                    <li>Scan the QR code above</li>
-                    <li><strong>Click "Visit Site"</strong> on Ngrok warning page</li>
-                    <li>Works from anywhere - no WiFi needed!</li>
-                    <li>Share this URL with anyone worldwide</li>
-                  </ol>
-                ) : (
-                  <ol className="text-sm space-y-1 text-muted-foreground list-decimal list-inside">
-                    <li>Connect your phone to the same WiFi network</li>
-                    <li>Open your mobile camera or QR scanner app</li>
-                    <li>Point at the QR code above</li>
-                    <li>Tap the notification to open the link</li>
-                    <li>View live queue updates on your mobile device</li>
-                  </ol>
-                )}
-                {usePublicUrl && publicUrl && (
-                  <div className="mt-3 p-2 bg-green-100 dark:bg-green-900/20 rounded text-xs">
-                    <strong>🌍 Public Access Active!</strong><br/>
-                    <span className="text-muted-foreground">Ngrok may show a warning - just click "Visit Site"</span>
-                  </div>
-                )}
-                {!usePublicUrl && networkIP && (
-                  <div className="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900/20 rounded text-xs">
-                    <strong>📡 Network IP:</strong> {networkIP}<br/>
-                    <span className="text-muted-foreground">Make sure both devices are on the same network</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Features */}
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                <Check className="w-4 h-4" />
-                <span>Live Updates</span>
-              </div>
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                <Check className="w-4 h-4" />
-                <span>Auto Refresh</span>
-              </div>
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                <Check className="w-4 h-4" />
-                <span>Multi-language</span>
-              </div>
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                <Check className="w-4 h-4" />
-                <span>Mobile Optimized</span>
-              </div>
+            <div className="text-xs text-muted-foreground text-center">
+              {usePublicUrl ? (
+                <p>Scan to access from anywhere via Ngrok</p>
+              ) : (
+                <p>Connect to same WiFi to scan</p>
+              )}
             </div>
 
             <Button

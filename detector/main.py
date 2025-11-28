@@ -176,6 +176,44 @@ class TTSResponse(BaseModel):
     error: str | None = None
 
 
+class CaptureRequest(BaseModel):
+    source: str | int  # URL or device index
+    
+class CaptureResponse(BaseModel):
+    frame_b64: str | None = None
+    error: str | None = None
+
+
+@app.post('/capture', response_model=CaptureResponse)
+def capture_frame(req: CaptureRequest):
+    """
+    Capture a single frame from a video source (URL or device index)
+    """
+    try:
+        # Parse source: if it looks like an int, treat as device index
+        source = req.source
+        if isinstance(source, str) and source.isdigit():
+            source = int(source)
+            
+        cap = cv2.VideoCapture(source)
+        if not cap.isOpened():
+            return CaptureResponse(error=f"Could not open video source: {source}")
+            
+        ret, frame = cap.read()
+        cap.release()
+        
+        if not ret:
+            return CaptureResponse(error="Failed to read frame")
+            
+        # Encode frame to base64
+        _, buffer = cv2.imencode('.jpg', frame)
+        frame_b64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return CaptureResponse(frame_b64=f"data:image/jpeg;base64,{frame_b64}")
+    except Exception as e:
+        return CaptureResponse(error=str(e))
+
+
 @app.post('/tts', response_model=TTSResponse)
 async def text_to_speech(req: TTSRequest):
     """

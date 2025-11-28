@@ -6,47 +6,35 @@ import ffmpegPath from "ffmpeg-static";
  * Returns the frame as a base64-encoded JPEG
  */
 export async function captureStreamFrame(streamUrl: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const args = [
-      "-hide_banner",
-      "-loglevel", "error",
-      "-rtsp_transport", "tcp", // For RTSP streams
-      "-i", streamUrl,
-      "-vframes", "1",
-      "-f", "image2pipe",
-      "-vcodec", "mjpeg",
-      "-q:v", "2",
-      "pipe:1",
-    ];
+  console.log(`[StreamCapture] Requesting frame for source: ${streamUrl}`);
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-    const ffmpeg = spawn(ffmpegPath as string, args);
-    const chunks: Buffer[] = [];
-    let errorOutput = "";
-
-    ffmpeg.stdout.on("data", (chunk) => chunks.push(chunk));
-    ffmpeg.stderr.on("data", (chunk) => errorOutput += chunk.toString());
-
-    const timeout = setTimeout(() => {
-      ffmpeg.kill();
-      reject(new Error("Stream capture timeout after 15 seconds"));
-    }, 15000);
-
-    ffmpeg.on("close", (code) => {
-      clearTimeout(timeout);
-      if (code === 0 && chunks.length > 0) {
-        const frameBuffer = Buffer.concat(chunks);
-        const base64Frame = frameBuffer.toString("base64");
-        resolve(`data:image/jpeg;base64,${base64Frame}`);
-      } else {
-        reject(new Error(`Failed to capture frame: ${errorOutput || 'Unknown error'}`));
-      }
+    const response = await fetch("http://127.0.0.1:8000/capture", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: streamUrl }),
+      signal: controller.signal,
     });
 
-    ffmpeg.on("error", (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-  });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Detector service error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    console.log(`[StreamCapture] Frame received successfully`);
+    return data.frame_b64;
+  } catch (error: any) {
+    console.error("[StreamCapture] Capture failed:", error.message);
+    throw error;
+  }
 }
 
 /**
