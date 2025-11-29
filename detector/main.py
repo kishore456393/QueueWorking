@@ -57,6 +57,7 @@ class DetectRequest(BaseModel):
 class DetectResponse(BaseModel):
     counts: List[int]
     annotated_frame_b64: str | None = None  # Optional annotated frame
+    detections: List[Point] = []  # Center points of detected people
 
 
 def point_in_polygon(px: float, py: float, polygon: List[Point]) -> bool:
@@ -116,6 +117,7 @@ def detect(req: DetectRequest):
 
     # Aggregate counts per polygon using bbox center and draw boxes
     counts = [0 for _ in req.polygons]
+    detections = []
     try:
         res = results[0]
         if res.boxes is not None and len(res.boxes) > 0:
@@ -148,18 +150,30 @@ def detect(req: DetectRequest):
                 
                 # Draw center point
                 cv2.circle(annotated_frame, (int(cx), int(cy)), 4, (255, 255, 0), -1)
+                
+                # Add to detections list
+                detections.append(Point(x=cx, y=cy))
     except Exception as e:
         print(f"Detection error: {e}")
         pass
 
     # Encode annotated frame to base64
+    # Resize for dashboard display (reduce bandwidth)
+    h, w = annotated_frame.shape[:2]
+    target_w = 640
+    if w > target_w:
+        target_h = int(h * (target_w / w))
+        annotated_frame = cv2.resize(annotated_frame, (target_w, target_h))
+
+    # Encode annotated frame to base64 with reduced quality
     try:
-        _, buffer = cv2.imencode('.jpg', cv2.cvtColor(annotated_frame, cv2.COLOR_RGB2BGR))
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
+        _, buffer = cv2.imencode('.jpg', cv2.cvtColor(annotated_frame, cv2.COLOR_RGB2BGR), encode_param)
         annotated_b64 = base64.b64encode(buffer).decode('utf-8')
     except Exception:
         annotated_b64 = None
 
-    return DetectResponse(counts=counts, annotated_frame_b64=annotated_b64)
+    return DetectResponse(counts=counts, annotated_frame_b64=annotated_b64, detections=detections)
 
 
 @app.get('/')

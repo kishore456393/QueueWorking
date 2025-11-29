@@ -1,17 +1,29 @@
 import {
-  type Video, type InsertVideo,
-  type QueueZone, type InsertQueueZone,
-  type DetectionSnapshot, type InsertDetectionSnapshot,
-  type Settings, type InsertSettings
+  users, type User, type InsertUser,
+  videos, type Video, type InsertVideo,
+  queueZones, type QueueZone, type InsertQueueZone,
+  detectionSnapshots, type DetectionSnapshot, type InsertDetectionSnapshot,
+  settings, type Settings, type InsertSettings
 } from "@shared/schema";
+import session from "express-session";
+import createMemoryStore from "memorystore";
 import { randomUUID } from "crypto";
-import { PrivacyManager } from "./privacy-manager";
+import { MySQLStorage } from "./mysql-storage";
+
+const MemoryStore = createMemoryStore(session);
 
 export interface IStorage {
-  // Video operations
-  createVideo(video: InsertVideo): Promise<Video>;
+  // User methods
+  getUser(id: number): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
+  createUser(user: InsertUser): Promise<User>;
+  sessionStore: session.Store;
+
+  // Video methods
+  createVideo(userId: number, video: InsertVideo): Promise<Video>;
   getVideo(id: string): Promise<Video | undefined>;
-  getAllVideos(): Promise<Video[]>;
+  getAllVideos(userId: number): Promise<Video[]>;
   deleteVideo(id: string): Promise<boolean>;
 
   // Queue Zone operations
@@ -23,37 +35,73 @@ export interface IStorage {
   createDetectionSnapshot(snapshot: InsertDetectionSnapshot): Promise<DetectionSnapshot>;
   getLatestDetectionSnapshot(videoId: string): Promise<DetectionSnapshot | undefined>;
   getDetectionSnapshotsByVideo(videoId: string, limit?: number): Promise<DetectionSnapshot[]>;
+  getHeatmapData(videoId: string): Promise<Array<{ x: number, y: number, value: number }>>;
 
   // Settings operations
   getSettings(): Promise<Settings>;
   createOrUpdateSettings(settings: InsertSettings): Promise<Settings>;
+  clearUsers(): Promise<void>;
+  cleanupOldSnapshots(ageInSeconds: number): Promise<number>;
 }
 
 export class MemStorage implements IStorage {
+  private users: Map<number, User>;
   private videos: Map<string, Video>;
   private queueZones: Map<string, QueueZone>;
   private detectionSnapshots: Map<string, DetectionSnapshot>;
   private settings: Settings | undefined;
-  private cleanupInterval: NodeJS.Timeout;
+  private currentId: number;
+  sessionStore: session.Store;
 
   constructor() {
+    this.users = new Map();
     this.videos = new Map();
     this.queueZones = new Map();
     this.detectionSnapshots = new Map();
-    this.settings = undefined;
-    
-    // Start automatic privacy-preserving cleanup
-    this.cleanupInterval = PrivacyManager.startAutoCleanup(this.detectionSnapshots);
-    console.log('[Privacy] Edge computing mode enabled - data retention limited to 1 hour');
+    this.currentId = 1;
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000,
+    });
+  }
+
+  async getUser(id: number): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.username === username || user.email === username,
+    );
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = this.currentId++;
+    const user: User = {
+      ...insertUser,
+      id,
+      firstName: insertUser.firstName ?? null,
+      lastName: insertUser.lastName ?? null,
+      email: insertUser.email ?? null,
+      role: insertUser.role || "viewer"
+    };
+    this.users.set(id, user);
+    return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
   }
 
   // Video operations
-  async createVideo(insertVideo: InsertVideo): Promise<Video> {
+  async createVideo(userId: number, insertVideo: InsertVideo): Promise<Video> {
     const id = randomUUID();
     const video: Video = {
       ...insertVideo,
       id,
+      userId,
       uploadedAt: new Date(),
+      sourceType: insertVideo.sourceType || "file",
+      streamUrl: insertVideo.streamUrl || null,
     };
     this.videos.set(id, video);
     return video;
@@ -63,10 +111,10 @@ export class MemStorage implements IStorage {
     return this.videos.get(id);
   }
 
-  async getAllVideos(): Promise<Video[]> {
-    return Array.from(this.videos.values()).sort((a, b) => 
-      b.uploadedAt.getTime() - a.uploadedAt.getTime()
-    );
+  async getAllVideos(userId: number): Promise<Video[]> {
+    return Array.from(this.videos.values())
+      .filter(video => video.userId === userId)
+      .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
   }
 
   async deleteVideo(id: string): Promise<boolean> {
@@ -87,7 +135,7 @@ export class MemStorage implements IStorage {
       id,
       videoId: insertZone.videoId,
       queueNumber: insertZone.queueNumber,
-      polygonPoints: insertZone.polygonPoints as Array<{x: number, y: number}>,
+      polygonPoints: insertZone.polygonPoints as Array<{ x: number, y: number }>,
       createdAt: new Date(),
     };
     this.queueZones.set(id, zone);
@@ -109,7 +157,7 @@ export class MemStorage implements IStorage {
   // Detection Snapshot operations
   async createDetectionSnapshot(insertSnapshot: InsertDetectionSnapshot): Promise<DetectionSnapshot> {
     const id = randomUUID();
-    
+
     // Edge computing privacy: Store only aggregate statistics, not full frame data
     const snapshot: DetectionSnapshot = {
       id,
@@ -123,12 +171,12 @@ export class MemStorage implements IStorage {
       recommendation: insertSnapshot.recommendation,
       // Privacy: Only store frame data temporarily for visualization
       // It will be automatically removed after 1 hour by the cleanup service
-      frameData: insertSnapshot.frameData,
-      recommendation: insertSnapshot.recommendation,
+      frameData: insertSnapshot.frameData || null,
+      detections: (insertSnapshot.detections as Array<{ x: number, y: number }>) || [],
     };
-    
+
     this.detectionSnapshots.set(id, snapshot);
-    console.log(`[Privacy] Snapshot created - aggregate stats only, auto-expires in 1 hour`);
+    console.log(`[Privacy] Snapshot created - aggregate stats only, auto - expires in 1 hour`);
     return snapshot;
   }
 
@@ -141,8 +189,30 @@ export class MemStorage implements IStorage {
     const snapshots = Array.from(this.detectionSnapshots.values())
       .filter((snapshot) => snapshot.videoId === videoId)
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    
+
     return limit ? snapshots.slice(0, limit) : snapshots;
+  }
+
+  async getHeatmapData(videoId: string): Promise<Array<{ x: number, y: number, value: number }>> {
+    const snapshots = await this.getDetectionSnapshotsByVideo(videoId);
+    const heatmapPoints: Map<string, number> = new Map();
+
+    snapshots.forEach(snapshot => {
+      if (snapshot.detections) {
+        snapshot.detections.forEach(point => {
+          // Round coordinates to group nearby points (grid size 20x20)
+          const x = Math.round(point.x / 20) * 20;
+          const y = Math.round(point.y / 20) * 20;
+          const key = `${x},${y}`;
+          heatmapPoints.set(key, (heatmapPoints.get(key) || 0) + 1);
+        });
+      }
+    });
+
+    return Array.from(heatmapPoints.entries()).map(([key, value]) => {
+      const [x, y] = key.split(',').map(Number);
+      return { x, y, value };
+    });
   }
 
   // Settings operations
@@ -172,6 +242,35 @@ export class MemStorage implements IStorage {
     };
     return this.settings;
   }
+
+  async clearUsers(): Promise<void> {
+    this.users.clear();
+  }
+
+  async cleanupOldSnapshots(ageInSeconds: number): Promise<number> {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - ageInSeconds * 1000);
+    let count = 0;
+
+    for (const [id, snapshot] of this.detectionSnapshots.entries()) {
+      if (snapshot.timestamp < cutoff) {
+        this.detectionSnapshots.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
 }
 
-export const storage = new MemStorage();
+// Use MySQL storage if DATABASE_URL is configured, otherwise fall back to memory storage
+let storage: IStorage;
+
+if (process.env.DATABASE_URL) {
+  console.log("✅ Using MySQL database storage");
+  storage = new MySQLStorage();
+} else {
+  console.warn("⚠️  DATABASE_URL not set - using in-memory storage (data will be lost on restart)");
+  storage = new MemStorage();
+}
+
+export { storage };

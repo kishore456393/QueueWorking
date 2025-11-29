@@ -3,10 +3,16 @@ import { spawn } from "child_process";
 import ffmpegPath from "ffmpeg-static";
 import { randomUUID } from "crypto";
 import { captureStreamFrame } from "./stream-capture";
+import type { DetectionSnapshot } from "@shared/schema";
 
 let detectionInterval: NodeJS.Timeout | null = null;
 let currentVideoId: string | null = null;
 let currentSecond = 0;
+let onUpdateCallback: ((snapshot: DetectionSnapshot) => void) | null = null;
+
+export function setYoloUpdateCallback(callback: (snapshot: DetectionSnapshot) => void): void {
+  onUpdateCallback = callback;
+}
 
 async function extractFrameJpeg(filePath: string, timeSec: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -43,7 +49,7 @@ async function extractFrameJpeg(filePath: string, timeSec: number): Promise<Buff
   });
 }
 
-async function postToDetector(imageB64: string, polygons: Array<Array<{ x: number; y: number }>>): Promise<{ counts: number[]; annotatedFrame: string | null }> {
+async function postToDetector(imageB64: string, polygons: Array<Array<{ x: number; y: number }>>): Promise<{ counts: number[]; annotatedFrame: string | null; detections: Array<{ x: number, y: number }> }> {
   const body = {
     image_b64: imageB64,
     polygons: polygons.map((pts) => ({ points: pts })),
@@ -55,10 +61,11 @@ async function postToDetector(imageB64: string, polygons: Array<Array<{ x: numbe
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`detector error: ${res.status}`);
-  const json = (await res.json()) as { counts: number[]; annotated_frame_b64?: string };
+  const json = (await res.json()) as { counts: number[]; annotated_frame_b64?: string; detections?: Array<{ x: number, y: number }> };
   return {
     counts: json.counts || [],
     annotatedFrame: json.annotated_frame_b64 ? `data:image/jpeg;base64,${json.annotated_frame_b64}` : null,
+    detections: json.detections || [],
   };
 }
 
@@ -66,8 +73,29 @@ export function isYoloRunning(): boolean {
   return detectionInterval !== null;
 }
 
+export function getCurrentVideoId(): string | null {
+  return currentVideoId;
+}
+
+export async function checkDetectorHealth(): Promise<boolean> {
+  try {
+    // Simple health check or just try to hit the root/docs
+    const res = await fetch("http://127.0.0.1:8000/docs", { method: "HEAD" });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function startYoloDetection(params: { videoId: string; updateInterval?: number }) {
   if (detectionInterval) stopYoloDetection();
+
+  // Fail fast if detector is not running
+  const isHealthy = await checkDetectorHealth();
+  if (!isHealthy) {
+    throw new Error("YOLO detector service is not reachable at http://127.0.0.1:8000");
+  }
+
   const { videoId, updateInterval = 2000 } = params;
   const video = await storage.getVideo(videoId);
   if (!video) throw new Error("Video not found");
@@ -114,8 +142,12 @@ export async function startYoloDetection(params: { videoId: string; updateInterv
         worstQueue: recommendation.worstQueue,
         recommendation: recommendation.message,
         frameData: detectionResult.annotatedFrame || `data:image/jpeg;base64,${b64}`,
+        detections: detectionResult.detections,
       });
-      // No-op: routes.ts will poll latest snapshot or use websockets if wired
+
+      if (onUpdateCallback) {
+        onUpdateCallback(snapshot);
+      }
     } catch (e: any) {
       // If extraction failed (e.g., sought past duration), rewind and try from zero next tick
       if (typeof e?.message === "string" && e.message.includes("ffmpeg failed")) {

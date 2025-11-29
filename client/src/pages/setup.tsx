@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Video, type QueueZone } from "@shared/schema";
-import { Upload, Edit3, Play, CheckCircle2, Camera, Video as VideoIcon } from "lucide-react";
+import { Upload, Edit3, Play, CheckCircle2, Camera, Video as VideoIcon, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Point = { x: number; y: number };
@@ -25,7 +25,7 @@ export default function Setup() {
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  
+
   // Camera stream states
   const [cameraName, setCameraName] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
@@ -71,6 +71,9 @@ export default function Setup() {
 
   const saveZonesMutation = useMutation({
     mutationFn: async (zones: { videoId: string; polygons: Polygon[] }) => {
+      // First delete existing zones to avoid duplicates
+      await apiRequest('DELETE', `/api/queue-zones/${zones.videoId}`);
+
       const promises = zones.polygons.map((polygon, index) =>
         apiRequest('POST', '/api/queue-zones', {
           videoId: zones.videoId,
@@ -126,6 +129,28 @@ export default function Setup() {
     },
   });
 
+  const deleteVideoMutation = useMutation({
+    mutationFn: async (videoId: string) => {
+      await apiRequest('DELETE', `/api/videos/${videoId}`);
+    },
+    onSuccess: () => {
+      setUploadedVideo(null);
+      setPolygons([]);
+      queryClient.invalidateQueries({ queryKey: ['/api/videos'] });
+      toast({
+        title: "Feed deleted",
+        description: "Video source removed successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Delete failed",
+        description: "Could not remove video source",
+        variant: "destructive",
+      });
+    },
+  });
+
   const captureFrame = async (cameraId: string) => {
     try {
       const response = await apiRequest('GET', `/api/cameras/${cameraId}/frame`);
@@ -162,7 +187,7 @@ export default function Setup() {
       });
       return;
     }
-    
+
     addCameraMutation.mutate({
       name: cameraName,
       streamUrl: streamUrl,
@@ -172,7 +197,7 @@ export default function Setup() {
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
-    
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -188,7 +213,7 @@ export default function Setup() {
   const handleCanvasRightClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault(); // Prevent context menu
     if (!isDrawing) return;
-    
+
     // Complete the polygon on right-click
     if (currentPolygon.length >= 3) {
       completePolygon();
@@ -352,7 +377,7 @@ export default function Setup() {
       try {
         // Nudge currentTime to trigger decode in some browsers
         v.currentTime = Math.max(0.01, v.currentTime);
-      } catch {}
+      } catch { }
     };
     const onLoadedData = () => {
       if (!c) return;
@@ -374,7 +399,7 @@ export default function Setup() {
     // Force reload to ensure metadata is fetched even if element is visually hidden
     v.load();
     // Try to start playback silently to ensure frames are decoded
-    v.play().catch(() => {});
+    v.play().catch(() => { });
     return () => {
       v.removeEventListener('loadedmetadata', onLoadedMetadata);
       v.removeEventListener('loadeddata', onLoadedData);
@@ -429,7 +454,7 @@ export default function Setup() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Tabs defaultValue="video" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="video">
                   <VideoIcon className="w-4 h-4 mr-2" />
                   Video File
@@ -438,8 +463,12 @@ export default function Setup() {
                   <Camera className="w-4 h-4 mr-2" />
                   Live Camera
                 </TabsTrigger>
+                <TabsTrigger value="saved">
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Saved Feeds
+                </TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="video" className="space-y-4">
                 <div className="border-2 border-dashed rounded-lg p-8 text-center hover-elevate">
                   <input
@@ -469,7 +498,7 @@ export default function Setup() {
                   {uploadMutation.isPending ? 'Uploading...' : 'Upload Video'}
                 </Button>
               </TabsContent>
-              
+
               <TabsContent value="camera" className="space-y-4">
                 <div className="space-y-3">
                   <div>
@@ -481,7 +510,7 @@ export default function Setup() {
                       onChange={(e) => setCameraName(e.target.value)}
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="stream-type">Stream Type</Label>
                     <Select value={streamType} onValueChange={setStreamType}>
@@ -495,7 +524,7 @@ export default function Setup() {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="stream-url">Stream URL</Label>
                     <Input
@@ -519,11 +548,83 @@ export default function Setup() {
                   {addCameraMutation.isPending ? 'Connecting...' : 'Add Camera'}
                 </Button>
               </TabsContent>
+
+              <TabsContent value="saved" className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Select Saved Feed</Label>
+                  <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-2">
+                    {videos?.map((video) => (
+                      <div
+                        key={video.id}
+                        className={`p-3 rounded-lg border cursor-pointer transition-all hover:bg-accent ${uploadedVideo?.id === video.id ? 'border-primary bg-primary/5' : 'border-border'}`}
+                        onClick={async () => {
+                          setUploadedVideo(video);
+                          // Fetch zones for this video
+                          try {
+                            const res = await apiRequest('GET', `/api/queue-zones/${video.id}`);
+                            const zones: QueueZone[] = await res.json();
+                            const loadedPolygons = zones.map(z => z.polygonPoints as Point[]);
+                            setPolygons(loadedPolygons);
+                            toast({
+                              title: "Feed Loaded",
+                              description: `Loaded ${video.filename} with ${loadedPolygons.length} queue zones`,
+                            });
+                            // If it's a camera, capture a fresh frame
+                            if (video.sourceType !== 'file') {
+                              captureFrame(video.id);
+                            }
+                          } catch (e) {
+                            console.error("Failed to load zones", e);
+                            toast({
+                              title: "Warning",
+                              description: "Could not load saved zones",
+                              variant: "destructive"
+                            });
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-primary/10 p-2 rounded-full">
+                              {video.sourceType === 'file' ? <VideoIcon className="w-4 h-4 text-primary" /> : <Camera className="w-4 h-4 text-primary" />}
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{video.filename}</p>
+                              <p className="text-xs text-muted-foreground capitalize">{video.sourceType}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {uploadedVideo?.id === video.id && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('Are you sure you want to delete this feed?')) {
+                                  deleteVideoMutation.mutate(video.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {(!videos || videos.length === 0) && (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        No saved feeds found.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
             </Tabs>
             {uploadedVideo && uploadedVideo.sourceType === 'file' && (
               <video
                 ref={videoRef}
-                src={`/uploads/${uploadedVideo.filename}`}
+                src={uploadedVideo.filepath.startsWith('http') ? uploadedVideo.filepath : `/uploads/${uploadedVideo.filename}`}
                 className="absolute opacity-0 -z-10 w-px h-px"
                 controls
                 preload="auto"

@@ -43,19 +43,6 @@ The system includes built-in Ngrok support for worldwide access:
 ## 🏗️ Technology Stack
 
 **Frontend:**
-- React 18 + TypeScript
-- Vite, TanStack Query
-- Shadcn/ui + Tailwind CSS
-- WebSocket for real-time updates
-
-**Backend:**
-- Node.js + Express + TypeScript
-- SQLite with Drizzle ORM
-- WebSocket support
-
-**AI/ML:**
-- Python FastAPI
-- YOLOv8 (Ultralytics)
 - OpenCV + Google TTS
 
 **Deployment:**
@@ -87,20 +74,6 @@ The system includes built-in Ngrok support for worldwide access:
 - 🏥 **Hospitals**: Patient waiting areas
 - 🎢 **Theme Parks**: Attraction queue times
 - 🏛️ **Government**: Public service counters
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```env
-PORT=5000
-DATABASE_URL=./database.db
-DETECTOR_PORT=8000
-DATA_RETENTION_HOURS=1
-```
-
-### Settings (via Dashboard)
-
 - Detection interval: 2-10 seconds
 - Audio interval: 10-60 seconds  
 - Language selection
@@ -420,22 +393,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - **Ultralytics YOLOv8** - Person detection model
-- **Google TTS** - Text-to-speech synthesis
-- **OpenCV** - Video processing
-- **React** - Frontend framework
-- **Shadcn/ui** - UI components
-
-## 📧 Contact
-
-**Project Maintainer:** kishore456393
-
-**Repository:** [github.com/kishore456393/QueueWorking](https://github.com/kishore456393/QueueWorking)
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**1. Python server won't start:**
 ```bash
 # Make sure Python dependencies are installed
 pip install -r detector/requirements.txt

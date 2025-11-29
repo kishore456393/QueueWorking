@@ -30,6 +30,9 @@ yolov8*.pt
 *.sqlite
 *.sqlite3
 
+# Environment variables
+.env
+
 # Logs
 *.log
 logs/

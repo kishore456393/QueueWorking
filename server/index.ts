@@ -1,5 +1,7 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { storage } from "./storage";
 import { setupVite, serveStatic, log } from "./vite";
 import "./detection-mock"; // Start mock detection generator
 import path from "path";
@@ -83,4 +85,16 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
   });
+
+  // Start background cleanup job (delete snapshots older than 60 seconds)
+  setInterval(async () => {
+    try {
+      const deleted = await storage.cleanupOldSnapshots(60);
+      if (deleted > 0) {
+        log(`[Cleanup] Removed ${deleted} old detection snapshots`);
+      }
+    } catch (e) {
+      console.error("[Cleanup] Job failed:", e);
+    }
+  }, 60 * 1000); // Run every minute
 })();

@@ -23,14 +23,15 @@ export function QRCodeGenerator() {
         const response = await fetch('/api/network-ip');
         const data = await response.json();
         setNetworkIP(data.ip);
-        const url = `http://${data.ip}:${data.port}/mobile-live`;
+        // Point to guest login endpoint which redirects to mobile-live
+        const url = `http://${data.ip}:${data.port}/api/auth/guest-login`;
         setMobileUrl(url);
 
         // Check if we're accessing via a public URL (ngrok, cloudflare, etc.)
         const currentHost = window.location.host;
         if (!currentHost.includes('localhost') && !currentHost.match(/^\d+\.\d+\.\d+\.\d+/)) {
           // We're on a public domain
-          const publicUrl = `${window.location.protocol}//${window.location.host}/mobile-live`;
+          const publicUrl = `${window.location.protocol}//${window.location.host}/api/auth/guest-login`;
           setPublicUrl(publicUrl);
           setUsePublicUrl(true);
         } else {
@@ -42,7 +43,7 @@ export function QRCodeGenerator() {
               // Find HTTPS tunnel
               const httpsTunnel = ngrokData.tunnels.find((t: any) => t.proto === 'https');
               if (httpsTunnel) {
-                const ngrokUrl = `${httpsTunnel.public_url}/mobile-live`;
+                const ngrokUrl = `${httpsTunnel.public_url}/api/auth/guest-login`;
                 setPublicUrl(ngrokUrl);
                 setUsePublicUrl(true); // Auto-select ngrok URL
                 console.log('✅ Ngrok URL detected and auto-selected:', ngrokUrl);
@@ -58,7 +59,7 @@ export function QRCodeGenerator() {
         // Fallback to current host
         const protocol = window.location.protocol;
         const host = window.location.host;
-        const url = `${protocol}//${host}/mobile-live`;
+        const url = `${protocol}//${host}/api/auth/guest-login`;
         setMobileUrl(url);
       }
     };

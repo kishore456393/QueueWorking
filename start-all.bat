@@ -21,6 +21,14 @@ if not exist "package.json" (
     exit /b 1
 )
 
+REM Check for .env file
+if not exist ".env" (
+    echo [WARNING] .env file not found. Creating from example...
+    copy .env.example .env >nul
+    echo   [OK] Created .env file. Please check configuration if needed.
+    echo.
+)
+
 REM Kill any existing processes on ports 5000 and 8000
 echo [CLEANUP] Checking for existing processes...
 for /f "tokens=5" %%a in ('netstat -aon ^| find ":5000" ^| find "LISTENING"') do (
@@ -32,6 +40,17 @@ for /f "tokens=5" %%a in ('netstat -aon ^| find ":8000" ^| find "LISTENING"') do
     taskkill /F /PID %%a >nul 2>&1
 )
 echo   [OK] Ports cleared
+echo.
+
+REM Check MySQL Service (Basic check)
+echo [CHECK] Verifying MySQL connection...
+net start | find "MySQL" >nul
+if %errorlevel% neq 0 (
+    echo   [WARN] MySQL service might not be running.
+    echo   Please ensure MySQL is started in Services or XAMPP/Workbench.
+) else (
+    echo   [OK] MySQL service detected
+)
 echo.
 
 REM Check Node.js installation
@@ -78,6 +97,17 @@ if not exist "node_modules" (
     echo.
 )
 
+REM Install Python dependencies
+echo [CHECK] Verifying Python dependencies...
+pip install -r detector/requirements.txt >nul 2>&1
+if %errorlevel% neq 0 (
+    echo   [WARN] Failed to auto-install Python dependencies.
+    echo   You may need to run: pip install -r detector/requirements.txt manually.
+) else (
+    echo   [OK] Python dependencies verified
+)
+echo.
+
 REM Start Node.js backend server
 echo ---------------------------------------------------------------
 echo [1/3] STARTING NODE.JS BACKEND + FRONTEND SERVER
@@ -95,7 +125,9 @@ echo [2/3] STARTING PYTHON DETECTION ENGINE
 echo ---------------------------------------------------------------
 echo   Port: 8000
 echo   Opening in new window...
+
 start "Queue System - Python Detector" cmd /k "color 0E && title Queue System - Python Detector && cd detector && python main.py"
+
 timeout /t 5 /nobreak >nul
 echo   [OK] Detection engine started
 echo.
@@ -118,7 +150,7 @@ if %errorlevel% equ 0 (
     timeout /t 3 /nobreak >nul
     echo   [OK] Ngrok tunnel started
     echo   Visit http://127.0.0.1:4040 to see your public URL
-echo.
+    echo.
 ) else (
     echo   [WARN] Ngrok not found - skipping tunnel
     echo   Run setup-ngrok.bat to install Ngrok for internet access
