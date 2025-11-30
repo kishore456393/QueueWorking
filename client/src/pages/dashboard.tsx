@@ -101,9 +101,25 @@ export default function Dashboard() {
     queryKey: ['/api/videos'],
   });
 
-  // Default to the most recently uploaded video when list loads
+  // Check for active detection on mount
   useEffect(() => {
-    if (!selectedVideoId && videos && videos.length > 0) {
+    const checkActiveDetection = async () => {
+      try {
+        const res = await apiRequest('GET', '/api/detection/status');
+        const status = await res.json();
+        if (status.running && status.activeVideoId) {
+          setSelectedVideoId(status.activeVideoId);
+        }
+      } catch (e) {
+        console.error("Failed to check detection status", e);
+      }
+    };
+    checkActiveDetection();
+  }, []);
+
+  // Default to the most recently uploaded video when list loads, if nothing selected
+  useEffect(() => {
+    if (selectedVideoId === undefined && videos && videos.length > 0) {
       setSelectedVideoId(videos[0].id);
     }
   }, [videos, selectedVideoId]);

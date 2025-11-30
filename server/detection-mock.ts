@@ -14,6 +14,7 @@ interface MockDetectionConfig {
 
 let detectionInterval: NodeJS.Timeout | null = null;
 let currentCounts: number[] = [];
+let currentVideoId: string | null = null;
 let onUpdateCallback: ((snapshot: DetectionSnapshot) => void) | null = null;
 
 // Simulate realistic queue fluctuations
@@ -39,7 +40,7 @@ function calculateRecommendation(counts: number[]): {
   const bestQueue = counts.indexOf(Math.min(...counts)) + 1;
   const worstQueue = counts.indexOf(Math.max(...counts)) + 1;
   const bestCount = counts[bestQueue - 1];
-  
+
   const recommendation = `Queue ${bestQueue} is fastest with ${bestCount} ${bestCount === 1 ? 'person' : 'people'} waiting`;
 
   return { bestQueue, worstQueue, recommendation };
@@ -57,6 +58,7 @@ export function startMockDetection(config: MockDetectionConfig): void {
   }
 
   console.log(`Starting mock detection for ${config.queueCount} queues on video ${config.videoId}`);
+  currentVideoId = config.videoId;
   currentCounts = generateQueueCounts(config.queueCount);
 
   // Generate and save detection data at regular intervals
@@ -93,12 +95,17 @@ export function stopMockDetection(): void {
   if (detectionInterval) {
     clearInterval(detectionInterval);
     detectionInterval = null;
+    currentVideoId = null;
     console.log('Mock detection stopped');
   }
 }
 
 export function isDetectionRunning(): boolean {
   return detectionInterval !== null;
+}
+
+export function getCurrentVideoId(): string | null {
+  return currentVideoId;
 }
 
 // Auto-start demo detection (opt-in via env var DEMO_DETECTION=true)
@@ -122,7 +129,7 @@ export async function initializeDemoDetection() {
     filename: 'demo-video.mp4',
     filepath: '/demo/demo-video.mp4',
   });
-  
+
   for (let i = 0; i < 5; i++) {
     await storage.createQueueZone({
       videoId: demoVideo.id,
@@ -141,7 +148,7 @@ export async function initializeDemoDetection() {
     queueCount: 5,
     updateInterval: 3000,
   });
-  
+
   console.log('Started demo detection with 5 queues');
 }
 

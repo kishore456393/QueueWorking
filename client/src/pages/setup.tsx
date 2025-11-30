@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,12 +54,7 @@ export default function Setup() {
       return response.json();
     },
     onSuccess: (data) => {
-      setUploadedVideo(data);
-      queryClient.invalidateQueries({ queryKey: ['/api/videos'] });
-      toast({
-        title: "Video uploaded successfully",
-        description: "You can now draw queue zones",
-      });
+      loadVideoAndZones(data);
     },
     onError: () => {
       toast({
@@ -104,20 +100,34 @@ export default function Setup() {
     },
   });
 
+  const startDetectionMutation = useMutation({
+    mutationFn: async (videoId: string) => {
+      return apiRequest('POST', `/api/detection/start/${videoId}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Detection Started",
+        description: "Go to the Dashboard to view live results.",
+      });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast({
+        title: 'Failed to start detection',
+        description: message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const addCameraMutation = useMutation({
     mutationFn: async (data: { name: string; streamUrl: string; sourceType: string }) => {
       const response = await apiRequest('POST', '/api/cameras', data);
       return response.json();
     },
     onSuccess: (camera) => {
-      setUploadedVideo(camera);
-      queryClient.invalidateQueries({ queryKey: ['/api/videos'] });
-      // Capture initial frame for drawing
-      captureFrame(camera.id);
-      toast({
-        title: "Camera added successfully",
-        description: "Capturing frame for zone drawing...",
-      });
+      // Check if we got an existing camera (it will have an ID and potentially zones)
+      loadVideoAndZones(camera);
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : 'Cannot connect to camera';
@@ -161,6 +171,46 @@ export default function Setup() {
         title: "Failed to capture frame",
         description: "Please try again",
         variant: "destructive",
+      });
+    }
+  };
+
+  const loadVideoAndZones = async (video: Video) => {
+    setUploadedVideo(video);
+    queryClient.invalidateQueries({ queryKey: ['/api/videos'] });
+
+    try {
+      const res = await apiRequest('GET', `/api/queue-zones/${video.id}`);
+      const zones: QueueZone[] = await res.json();
+      const loadedPolygons = zones.map(z =>
+        typeof z.polygonPoints === 'string'
+          ? JSON.parse(z.polygonPoints as unknown as string)
+          : z.polygonPoints
+      ) as Point[][];
+      setPolygons(loadedPolygons);
+
+      if (loadedPolygons.length > 0) {
+        toast({
+          title: "Configuration Restored",
+          description: `Loaded ${video.filename} with ${loadedPolygons.length} existing queue zones`,
+        });
+      } else {
+        toast({
+          title: "Feed Loaded",
+          description: `Loaded ${video.filename}`,
+        });
+      }
+
+      // If it's a camera, capture a fresh frame
+      if (video.sourceType !== 'file') {
+        captureFrame(video.id);
+      }
+    } catch (e) {
+      console.error("Failed to load zones", e);
+      toast({
+        title: "Warning",
+        description: "Could not load saved zones",
+        variant: "destructive"
       });
     }
   };
@@ -557,31 +607,7 @@ export default function Setup() {
                       <div
                         key={video.id}
                         className={`p-3 rounded-lg border cursor-pointer transition-all hover:bg-accent ${uploadedVideo?.id === video.id ? 'border-primary bg-primary/5' : 'border-border'}`}
-                        onClick={async () => {
-                          setUploadedVideo(video);
-                          // Fetch zones for this video
-                          try {
-                            const res = await apiRequest('GET', `/api/queue-zones/${video.id}`);
-                            const zones: QueueZone[] = await res.json();
-                            const loadedPolygons = zones.map(z => z.polygonPoints as Point[]);
-                            setPolygons(loadedPolygons);
-                            toast({
-                              title: "Feed Loaded",
-                              description: `Loaded ${video.filename} with ${loadedPolygons.length} queue zones`,
-                            });
-                            // If it's a camera, capture a fresh frame
-                            if (video.sourceType !== 'file') {
-                              captureFrame(video.id);
-                            }
-                          } catch (e) {
-                            console.error("Failed to load zones", e);
-                            toast({
-                              title: "Warning",
-                              description: "Could not load saved zones",
-                              variant: "destructive"
-                            });
-                          }
-                        }}
+                        onClick={() => loadVideoAndZones(video)}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
@@ -620,6 +646,8 @@ export default function Setup() {
                   </div>
                 </div>
               </TabsContent>
+
+
             </Tabs>
             {uploadedVideo && uploadedVideo.sourceType === 'file' && (
               <video
@@ -687,34 +715,60 @@ export default function Setup() {
             <Button
               onClick={saveZones}
               disabled={polygons.length === 0 || saveZonesMutation.isPending}
-              className="w-full hover-elevate active-elevate-2"
+              className="w-full hover-elevate active-elevate-2 mb-2"
               data-testid="button-save-zones"
             >
               {saveZonesMutation.isPending ? 'Saving...' : `Save ${polygons.length} Queue Zone${polygons.length !== 1 ? 's' : ''}`}
             </Button>
+
+            {uploadedVideo && polygons.length > 0 && (
+              <Button
+                onClick={() => startDetectionMutation.mutate(uploadedVideo.id)}
+                disabled={startDetectionMutation.isPending}
+                variant="secondary"
+                className="w-full hover-elevate active-elevate-2"
+                data-testid="button-start-detection"
+              >
+                {startDetectionMutation.isPending ? 'Starting...' : 'Start Detection (Use Saved Zones)'}
+              </Button>
+            )}
+
+            {polygons.length > 0 && (
+              <Link href="/dashboard">
+                <Button
+                  variant="outline"
+                  className="w-full hover-elevate active-elevate-2 mt-2"
+                  data-testid="button-go-dashboard"
+                >
+                  Go to Dashboard
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {uploadedVideo && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Video Canvas</CardTitle>
-            <CardDescription>Click to draw queue zone polygons</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <canvas
-              ref={canvasRef}
-              onClick={handleCanvasClick}
-              onMouseDown={handleCanvasClick}
-              onContextMenu={handleCanvasRightClick}
-              className="w-full rounded-lg border border-border cursor-crosshair"
-              style={{ maxHeight: '600px' }}
-              data-testid="canvas-polygon-draw"
-            />
-          </CardContent>
-        </Card>
-      )}
-    </div>
+      {
+        uploadedVideo && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Video Canvas</CardTitle>
+              <CardDescription>Click to draw queue zone polygons</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <canvas
+                ref={canvasRef}
+                onClick={handleCanvasClick}
+                onMouseDown={handleCanvasClick}
+                onContextMenu={handleCanvasRightClick}
+                className="w-full rounded-lg border border-border cursor-crosshair"
+                style={{ maxHeight: '600px' }}
+                data-testid="canvas-polygon-draw"
+              />
+            </CardContent>
+          </Card>
+        )
+      }
+    </div >
   );
 }

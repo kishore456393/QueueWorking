@@ -24,6 +24,7 @@ export const videos = mysqlTable("videos", {
   sourceType: text("source_type").notNull().default("file"), // "file", "rtsp", "http", or "webcam"
   streamUrl: text("stream_url"), // URL for live streams
   userId: int("user_id").notNull().references(() => users.id),
+  originalName: text("original_name"),
   uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
 });
 

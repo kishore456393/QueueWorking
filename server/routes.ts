@@ -8,8 +8,8 @@ import fs from "fs/promises";
 import os from "os";
 import { storage } from "./storage";
 import { insertVideoSchema, insertQueueZoneSchema, insertDetectionSnapshotSchema, insertSettingsSchema, insertUserSchema } from "@shared/schema";
-import { startMockDetection, stopMockDetection, isDetectionRunning, setUpdateCallback } from "./detection-mock";
-import { startYoloDetection, stopYoloDetection, isYoloRunning, setYoloUpdateCallback, getCurrentVideoId } from "./detection-yolo";
+import { startMockDetection, stopMockDetection, isDetectionRunning, setUpdateCallback, getCurrentVideoId as getMockVideoId } from "./detection-mock";
+import { startYoloDetection, stopYoloDetection, isYoloRunning, setYoloUpdateCallback, getCurrentVideoId as getYoloVideoId } from "./detection-yolo";
 import { captureStreamFrame, validateStreamUrl } from "./stream-capture";
 import { setupAuth } from "./auth";
 
@@ -118,6 +118,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/logout", (req, res, next) => {
+    // Stop any running detection to prevent data leakage to next session
+    stopMockDetection();
+    stopYoloDetection();
+
     req.logout((err) => {
       if (err) return next(err);
       res.sendStatus(200);
@@ -248,11 +252,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No video file uploaded' });
       }
 
+
+
       // Use the actual stored filename so the client can load via /uploads/:filename
       const video = await storage.createVideo(req.user.id, {
         filename: req.file.filename,
         filepath: req.file.path,
         sourceType: 'file',
+        originalName: req.file.originalname,
       });
 
       // Also include a convenient publicUrl for the client (backwards-compatible)
@@ -282,6 +289,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!isValid) {
         return res.status(400).json({ error: 'Cannot connect to stream URL' });
+      }
+
+      // Check if camera already exists for this user
+      const existingVideos = await storage.getAllVideos(req.user.id);
+      const existingCamera = existingVideos.find(v =>
+        v.streamUrl === streamUrl &&
+        v.sourceType === sourceType
+      );
+
+      if (existingCamera) {
+        console.log(`Returning existing camera: ${existingCamera.id}`);
+        return res.json(existingCamera);
       }
 
       // Create camera entry
@@ -487,9 +506,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertSettingsSchema.parse(req.body);
       const settings = await storage.createOrUpdateSettings(validatedData);
 
-      // If detection is running, restart it with new interval
       if (isYoloRunning()) {
-        const currentVideoId = getCurrentVideoId();
+        const currentVideoId = getYoloVideoId();
         if (currentVideoId) {
           console.log(`Restarting detection with new interval: ${settings.refreshInterval}s`);
           await startYoloDetection({
@@ -569,7 +587,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/detection/status', async (req, res) => {
     try {
-      res.json({ running: isDetectionRunning() || isYoloRunning() });
+      const activeVideoId = getYoloVideoId() || getMockVideoId();
+      res.json({
+        running: isDetectionRunning() || isYoloRunning(),
+        activeVideoId
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

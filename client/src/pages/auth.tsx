@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, Eye, EyeOff } from "lucide-react";
 
 export default function AuthPage() {
     const { user, loginMutation, registerMutation } = useAuth();
     const [isLogin, setIsLogin] = useState(true);
+    const [showPassword, setShowPassword] = useState(false);
     const [, setLocation] = useLocation();
 
     useEffect(() => {
@@ -99,14 +100,25 @@ export default function AuthPage() {
 
                             <div className="space-y-2">
                                 <Label htmlFor="login-password">Password</Label>
-                                <Input
-                                    id="login-password"
-                                    type="password"
-                                    {...loginForm.register("password")}
-                                    disabled={loginMutation.isPending}
-                                    placeholder="Enter your password"
-                                    className="h-10"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="login-password"
+                                        type={showPassword ? "text" : "password"}
+                                        {...loginForm.register("password")}
+                                        disabled={loginMutation.isPending}
+                                        placeholder="Enter your password"
+                                        className="h-10 pr-10"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-0 top-0 h-10 w-10 text-muted-foreground hover:text-foreground"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                    >
+                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
+                                </div>
                                 {loginForm.formState.errors.password && (
                                     <p className="text-sm text-destructive">
                                         {loginForm.formState.errors.password.message}
@@ -135,7 +147,10 @@ export default function AuthPage() {
                                 <span className="text-muted-foreground">Don't have an account? </span>
                                 <button
                                     type="button"
-                                    onClick={() => setIsLogin(false)}
+                                    onClick={() => {
+                                        setIsLogin(false);
+                                        setShowPassword(false);
+                                    }}
                                     className="text-primary hover:underline font-medium"
                                 >
                                     Create one
@@ -213,14 +228,25 @@ export default function AuthPage() {
 
                             <div className="space-y-2">
                                 <Label htmlFor="register-password">Password</Label>
-                                <Input
-                                    id="register-password"
-                                    type="password"
-                                    {...registerForm.register("password")}
-                                    disabled={registerMutation.isPending}
-                                    placeholder="Create a password"
-                                    className="h-10"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="register-password"
+                                        type={showPassword ? "text" : "password"}
+                                        {...registerForm.register("password")}
+                                        disabled={registerMutation.isPending}
+                                        placeholder="Create a password"
+                                        className="h-10 pr-10"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-0 top-0 h-10 w-10 text-muted-foreground hover:text-foreground"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                    >
+                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
+                                </div>
                                 {registerForm.formState.errors.password && (
                                     <p className="text-sm text-destructive">
                                         {registerForm.formState.errors.password.message}
@@ -252,7 +278,10 @@ export default function AuthPage() {
                                 <span className="text-muted-foreground">Already have an account? </span>
                                 <button
                                     type="button"
-                                    onClick={() => setIsLogin(true)}
+                                    onClick={() => {
+                                        setIsLogin(true);
+                                        setShowPassword(false);
+                                    }}
                                     className="text-primary hover:underline font-medium"
                                 >
                                     Sign in
