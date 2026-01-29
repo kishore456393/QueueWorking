@@ -104,6 +104,11 @@ export class MySQLStorage implements IStorage {
             .orderBy(desc(videos.uploadedAt));
     }
 
+    async getAllSystemVideos(): Promise<Video[]> {
+        return await db.select().from(videos)
+            .orderBy(desc(videos.uploadedAt));
+    }
+
     async deleteVideo(id: string): Promise<boolean> {
         // Delete related queue zones and detection snapshots first
         await this.deleteQueueZonesByVideo(id);

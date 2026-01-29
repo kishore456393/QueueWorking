@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { type DetectionSnapshot, type Settings, type Video } from "@shared/schema";
@@ -73,9 +74,31 @@ export default function TvDashboard() {
         queryKey: ['/api/videos'],
     });
 
-    // Default to the most recently uploaded video
+    // Check for active detection on mount
+    useEffect(() => {
+        const checkActiveDetection = async () => {
+            try {
+                const res = await apiRequest('GET', '/api/detection/status');
+                const status = await res.json();
+                if (status.running && status.activeVideoId) {
+                    setSelectedVideoId(status.activeVideoId);
+                }
+            } catch (e) {
+                console.error("Failed to check detection status", e);
+            }
+        };
+        checkActiveDetection();
+    }, []);
+
+    // Default to the most recently uploaded video if no active detection
     useEffect(() => {
         if (!selectedVideoId && videos && videos.length > 0) {
+            // Only set default if we haven't already set it from active detection
+            // We can check this by seeing if selectedVideoId is still undefined
+            // However, since checkActiveDetection is async, we might have a race condition.
+            // But usually active detection check is fast. 
+            // Better logic: If we have videos, and selectedVideoId is undefined, set it.
+            // But if active detection comes in later, it will overwrite it (which is fine).
             setSelectedVideoId(videos[0].id);
         }
     }, [videos, selectedVideoId]);
@@ -109,19 +132,27 @@ export default function TvDashboard() {
     const displayData = latestData || snapshot;
     const selectedLanguage = settings?.language || 'en';
 
+    // Use a ref to keep track of the latest data without triggering re-renders or effect re-runs
+    const displayDataRef = useRef<DetectionSnapshot | null | undefined>(null);
+
+    useEffect(() => {
+        displayDataRef.current = displayData;
+    }, [displayData]);
+
     // Auto-announcement logic
     useEffect(() => {
         if (!settings?.audioEnabled) return;
 
         const interval = setInterval(async () => {
-            if (!displayData) return;
+            const currentData = displayDataRef.current;
+            if (!currentData) return;
 
             try {
                 const text = t(selectedLanguage as Language, 'announcement' as any, {
-                    bestQueue: displayData.bestQueue,
-                    worstQueue: displayData.worstQueue,
-                    bestCount: displayData.queueCounts[displayData.bestQueue - 1],
-                    worstCount: displayData.queueCounts[displayData.worstQueue - 1],
+                    bestQueue: currentData.bestQueue,
+                    worstQueue: currentData.worstQueue,
+                    bestCount: currentData.queueCounts[currentData.bestQueue - 1],
+                    worstCount: currentData.queueCounts[currentData.worstQueue - 1],
                 });
                 await playTextToSpeech(text, selectedLanguage);
             } catch (error) {
@@ -130,7 +161,7 @@ export default function TvDashboard() {
         }, (settings.audioInterval || 30) * 1000);
 
         return () => clearInterval(interval);
-    }, [settings?.audioEnabled, settings?.audioInterval, selectedLanguage, displayData]);
+    }, [settings?.audioEnabled, settings?.audioInterval, selectedLanguage]);
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -244,14 +275,14 @@ export default function TvDashboard() {
                                     <div
                                         key={index}
                                         className={`flex items-center justify-between p-4 rounded-xl border-2 ${isBest ? 'border-green-500 bg-green-500/5' :
-                                                isWorst ? 'border-red-500 bg-red-500/5' :
-                                                    'border-border bg-card'
+                                            isWorst ? 'border-red-500 bg-red-500/5' :
+                                                'border-border bg-card'
                                             }`}
                                     >
                                         <div className="flex items-center gap-4">
                                             <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${isBest ? 'bg-green-500 text-white' :
-                                                    isWorst ? 'bg-red-500 text-white' :
-                                                        'bg-primary text-primary-foreground'
+                                                isWorst ? 'bg-red-500 text-white' :
+                                                    'bg-primary text-primary-foreground'
                                                 }`}>
                                                 {queueNum}
                                             </div>

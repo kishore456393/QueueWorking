@@ -341,6 +341,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/videos', isAuthenticated, async (req: any, res) => {
     try {
+      // If user is a viewer (guest), allow them to see all videos in the system
+      // This is necessary for the mobile dashboard to work
+      if (req.user.role === 'viewer' || req.user.role === 'guest') {
+        const videos = await storage.getAllSystemVideos();
+        return res.json(videos);
+      }
+
+      // Otherwise, only show videos uploaded by the user
       const videos = await storage.getAllVideos(req.user.id);
       res.json(videos);
     } catch (error: any) {

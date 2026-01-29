@@ -24,6 +24,7 @@ export interface IStorage {
   createVideo(userId: number, video: InsertVideo): Promise<Video>;
   getVideo(id: string): Promise<Video | undefined>;
   getAllVideos(userId: number): Promise<Video[]>;
+  getAllSystemVideos(): Promise<Video[]>;
   deleteVideo(id: string): Promise<boolean>;
 
   // Queue Zone operations
@@ -102,6 +103,7 @@ export class MemStorage implements IStorage {
       uploadedAt: new Date(),
       sourceType: insertVideo.sourceType || "file",
       streamUrl: insertVideo.streamUrl || null,
+      originalName: insertVideo.originalName || null,
     };
     this.videos.set(id, video);
     return video;
@@ -114,6 +116,11 @@ export class MemStorage implements IStorage {
   async getAllVideos(userId: number): Promise<Video[]> {
     return Array.from(this.videos.values())
       .filter(video => video.userId === userId)
+      .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
+  }
+
+  async getAllSystemVideos(): Promise<Video[]> {
+    return Array.from(this.videos.values())
       .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
   }
 

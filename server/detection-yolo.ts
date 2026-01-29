@@ -14,6 +14,9 @@ export function setYoloUpdateCallback(callback: (snapshot: DetectionSnapshot) =>
   onUpdateCallback = callback;
 }
 
+import fs from "fs";
+import path from "path";
+
 async function extractFrameJpeg(filePath: string, timeSec: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     // Use accurate seek by placing -ss after -i to avoid empty output on some MP4/H264 inputs
@@ -110,7 +113,20 @@ export async function startYoloDetection(params: { videoId: string; updateInterv
       let b64: string;
 
       if (video.sourceType === 'file') {
-        const frame = await extractFrameJpeg(video.filepath, currentSecond);
+        let filePath = video.filepath;
+        
+        // Fallback: Check if file exists at stored path, if not try local uploads dir
+        if (!fs.existsSync(filePath)) {
+          const localPath = path.join(process.cwd(), 'uploads', path.basename(filePath));
+          if (fs.existsSync(localPath)) {
+            console.log(`[YOLO] Stored path not found, using local fallback: ${localPath}`);
+            filePath = localPath;
+          } else {
+             console.warn(`[YOLO] File not found at stored path or local fallback: ${filePath}`);
+          }
+        }
+
+        const frame = await extractFrameJpeg(filePath, currentSecond);
         currentSecond += Math.max(1, Math.floor(updateInterval / 1000));
         b64 = frame.toString("base64");
       } else {

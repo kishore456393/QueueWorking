@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -118,11 +118,14 @@ export default function Dashboard() {
   }, []);
 
   // Default to the most recently uploaded video when list loads, if nothing selected
+  // REMOVED: User wants dashboard to only show active video from setup
+  /*
   useEffect(() => {
     if (selectedVideoId === undefined && videos && videos.length > 0) {
       setSelectedVideoId(videos[0].id);
     }
   }, [videos, selectedVideoId]);
+  */
 
   // Initialize refresh interval and language from settings
   useEffect(() => {
@@ -176,6 +179,13 @@ export default function Dashboard() {
 
   const displayData = latestData || snapshot;
 
+  // Use a ref to keep track of the latest data without triggering re-renders or effect re-runs
+  const latestDataRef = useRef<DetectionSnapshot | null | undefined>(null);
+
+  useEffect(() => {
+    latestDataRef.current = latestData || snapshot;
+  }, [latestData, snapshot]);
+
   // Automatic periodic announcements when audio is enabled
   useEffect(() => {
     if (!settings?.audioEnabled) {
@@ -186,7 +196,7 @@ export default function Dashboard() {
 
     // Play announcement function that checks for data and prevents overlaps
     const playAnnouncement = async () => {
-      const currentData = latestData || snapshot;
+      const currentData = latestDataRef.current;
       if (!currentData || isPlaying) return;
 
       try {
@@ -376,7 +386,8 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          {/* Video selector */}
+          {/* Video selector REMOVED as per user request */}
+          {/* 
           {videos && videos.length > 0 && (
             <div className="mb-6 flex items-center gap-3">
               <Label className="min-w-28">{t(selectedLanguage as Language, 'activeVideo')}</Label>
@@ -394,6 +405,7 @@ export default function Dashboard() {
               </Select>
             </div>
           )}
+          */}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Card>
