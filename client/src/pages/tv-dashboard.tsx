@@ -3,23 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { type DetectionSnapshot, type Settings, type Video } from "@shared/schema";
 import { Users, TrendingUp, TrendingDown, Clock, Maximize2, Minimize2 } from "lucide-react";
 import { t, type Language } from "@/lib/translations";
 import { playTextToSpeech } from "@/lib/tts";
-
-const LANGUAGES = {
-    'en': 'English',
-    'hi': 'Hindi',
-    'ta': 'Tamil',
-    'te': 'Telugu',
-    'bn': 'Bengali',
-    'mr': 'Marathi',
-    'gu': 'Gujarati',
-    'kn': 'Kannada',
-    'ml': 'Malayalam',
-    'pa': 'Punjabi',
-};
 
 const ANNOUNCEMENTS = {
     'en': (bestQueue: number, worstQueue: number, bestCount: number, worstCount: number) =>
@@ -187,32 +175,30 @@ export default function TvDashboard() {
     };
 
     return (
-        <div className="min-h-screen bg-background text-foreground p-6 flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-                        Queue Status
+        <div className="flex min-h-screen flex-col overflow-hidden bg-background p-4 text-foreground md:p-6">
+            <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between md:mb-6">
+                <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="text-2xl font-semibold tracking-tight md:text-4xl">
+                        Queue status
                     </h1>
-                    <Badge variant={wsConnected ? "default" : "destructive"} className="text-lg px-3 py-1">
-                        {wsConnected ? "LIVE" : "OFFLINE"}
+                    <Badge variant={wsConnected ? "default" : "destructive"} className="px-3 py-1 text-sm uppercase tracking-wide">
+                        {wsConnected ? "Live" : "Offline"}
                     </Badge>
                 </div>
-                <div className="flex items-center gap-6">
-                    <div className="text-4xl font-mono font-bold text-muted-foreground">
-                        {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                <div className="flex items-center gap-3 md:gap-6">
+                    <div className="font-mono text-2xl font-semibold tabular-nums text-muted-foreground md:text-4xl">
+                        {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </div>
-                    <button onClick={toggleFullscreen} className="p-2 hover:bg-muted rounded-full transition-colors">
-                        {isFullscreen ? <Minimize2 className="w-8 h-8" /> : <Maximize2 className="w-8 h-8" />}
-                    </button>
+                    <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={toggleFullscreen} aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}>
+                        {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                    </Button>
                 </div>
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
-                {/* Left Column - Video Feed (7 cols) */}
-                <div className="col-span-7 flex flex-col gap-6">
-                    <Card className="flex-1 overflow-hidden border-2 border-primary/20 shadow-xl">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-12">
+                <div className="flex min-h-[240px] flex-col gap-6 lg:col-span-7">
+                    <Card className="flex flex-1 overflow-hidden border border-border shadow-sm">
                         <CardContent className="p-0 h-full bg-black flex items-center justify-center relative">
                             {displayData?.frameData ? (
                                 <img
@@ -239,18 +225,17 @@ export default function TvDashboard() {
                 </div>
 
                 {/* Right Column - Stats (5 cols) */}
-                <div className="col-span-5 flex flex-col gap-6">
-                    {/* Best Queue Card - Highlighted */}
-                    <Card className="bg-green-500/10 border-green-500/50 shadow-lg">
+                <div className="flex flex-col gap-6 lg:col-span-5">
+                    <Card className="border-emerald-500/40 bg-emerald-500/5 shadow-sm">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-2xl text-green-600 flex items-center gap-2">
-                                <TrendingDown className="w-8 h-8" />
-                                Fastest Queue
+                            <CardTitle className="flex items-center gap-2 text-xl text-emerald-700 dark:text-emerald-400 md:text-2xl">
+                                <TrendingDown className="h-7 w-7 md:h-8 md:w-8" />
+                                Fastest queue
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="flex items-end gap-4">
-                                <span className="text-8xl font-bold text-green-600">
+                                <span className="text-7xl font-bold tabular-nums text-emerald-600 md:text-8xl">
                                     {displayData?.bestQueue || '-'}
                                 </span>
                                 <div className="mb-4 text-2xl text-muted-foreground">
@@ -261,11 +246,11 @@ export default function TvDashboard() {
                     </Card>
 
                     {/* Queue List */}
-                    <Card className="flex-1 flex flex-col shadow-md">
+                    <Card className="flex min-h-0 flex-1 flex-col border-border shadow-sm">
                         <CardHeader>
-                            <CardTitle className="text-2xl">Queue Details</CardTitle>
+                            <CardTitle className="text-xl md:text-2xl">Queue details</CardTitle>
                         </CardHeader>
-                        <CardContent className="flex-1 overflow-y-auto space-y-4">
+                        <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
                             {displayData?.queueCounts.map((count, index) => {
                                 const queueNum = index + 1;
                                 const isBest = queueNum === displayData.bestQueue;
@@ -274,14 +259,14 @@ export default function TvDashboard() {
                                 return (
                                     <div
                                         key={index}
-                                        className={`flex items-center justify-between p-4 rounded-xl border-2 ${isBest ? 'border-green-500 bg-green-500/5' :
-                                            isWorst ? 'border-red-500 bg-red-500/5' :
+                                        className={`flex items-center justify-between rounded-xl border-2 p-4 ${isBest ? 'border-emerald-500/60 bg-emerald-500/5' :
+                                            isWorst ? 'border-destructive/50 bg-destructive/5' :
                                                 'border-border bg-card'
                                             }`}
                                     >
                                         <div className="flex items-center gap-4">
-                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${isBest ? 'bg-green-500 text-white' :
-                                                isWorst ? 'bg-red-500 text-white' :
+                                            <div className={`flex h-12 w-12 items-center justify-center rounded-full text-xl font-bold ${isBest ? 'bg-emerald-600 text-white' :
+                                                isWorst ? 'bg-destructive text-destructive-foreground' :
                                                     'bg-primary text-primary-foreground'
                                                 }`}>
                                                 {queueNum}
@@ -304,15 +289,15 @@ export default function TvDashboard() {
             </div>
 
             {/* Footer Announcement */}
-            <div className="mt-6">
-                <Card className="bg-primary/5 border-primary/20 shadow-lg">
-                    <CardContent className="p-6 flex items-center gap-6">
-                        <div className="p-4 bg-primary/10 rounded-full">
-                            <Clock className="w-8 h-8 text-primary" />
+            <div className="mt-4 md:mt-6">
+                <Card className="border-primary/20 bg-primary/5 shadow-sm">
+                    <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:gap-6 md:p-6">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 md:h-14 md:w-14">
+                            <Clock className="h-7 w-7 text-primary md:h-8 md:w-8" />
                         </div>
-                        <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-primary mb-1">Recommendation</h3>
-                            <p className="text-2xl font-medium leading-relaxed">
+                        <div className="min-w-0 flex-1">
+                            <h3 className="mb-1 text-base font-semibold text-primary md:text-lg">Recommendation</h3>
+                            <p className="text-lg font-medium leading-relaxed md:text-2xl">
                                 {getAnnouncement() || "Analyzing queue status..."}
                             </p>
                         </div>

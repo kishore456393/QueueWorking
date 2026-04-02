@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { t, type Language } from "@/lib/translations";
 import { playTextToSpeech } from "@/lib/tts";
 import { QRCodeGenerator } from "@/components/qr-code-generator";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const LANGUAGES = {
   'en': '🇬🇧 English',
@@ -73,7 +74,7 @@ export default function Dashboard() {
   const [isAnnouncing, setIsAnnouncing] = useState(false);
   const [viewMode, setViewMode] = useState<'single' | 'grid'>('single');
 
-  const { data: settings } = useQuery<Settings>({
+  const { data: settings, isLoading: isSettingsLoading, isError: isSettingsError } = useQuery<Settings>({
     queryKey: ['/api/settings'],
   });
 
@@ -97,7 +98,7 @@ export default function Dashboard() {
     },
   });
 
-  const { data: videos } = useQuery<Video[]>({
+  const { data: videos, isLoading: isVideosLoading, isError: isVideosError } = useQuery<Video[]>({
     queryKey: ['/api/videos'],
   });
 
@@ -135,7 +136,7 @@ export default function Dashboard() {
     }
   }, [settings]);
 
-  const { data: snapshot, refetch } = useQuery<DetectionSnapshot>({
+  const { data: snapshot, refetch, isLoading: isSnapshotLoading, isError: isSnapshotError } = useQuery<DetectionSnapshot>({
     queryKey: ['/api/detection-snapshots/latest', selectedVideoId],
     enabled: !!selectedVideoId,
     refetchInterval: autoRefresh ? refreshInterval * 1000 : false,
@@ -318,10 +319,10 @@ export default function Dashboard() {
   const isRecent = freshnessMinutes !== null && freshnessMinutes < 5;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="space-y-8">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-4xl font-bold mb-2">{t(selectedLanguage as Language, 'liveDashboard')}</h1>
+          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl mb-2">{t(selectedLanguage as Language, 'liveDashboard')}</h1>
           <p className="text-muted-foreground text-lg">
             {t(selectedLanguage as Language, 'realTimeAnalytics')}
           </p>
@@ -352,8 +353,8 @@ export default function Dashboard() {
             </Button>
           </Link>
           <QRCodeGenerator />
-          <Badge variant={wsConnected ? "default" : "destructive"} data-testid="badge-websocket-status">
-            {wsConnected ? `🟢 ${t(selectedLanguage as Language, 'live')}` : `🔴 ${t(selectedLanguage as Language, 'offline')}`}
+          <Badge variant={wsConnected ? "default" : "destructive"} data-testid="badge-websocket-status" className="tabular-nums">
+            {wsConnected ? t(selectedLanguage as Language, 'live') : t(selectedLanguage as Language, 'offline')}
           </Badge>
           {freshnessMinutes !== null && (
             <Badge variant={isFresh ? "default" : isRecent ? "secondary" : "destructive"} data-testid="badge-data-freshness">
@@ -362,6 +363,28 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {(isSettingsError || isVideosError || isSnapshotError) && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Some data failed to load</CardTitle>
+            <CardDescription>Check your connection and try again.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {(isSettingsLoading || isVideosLoading || (selectedVideoId && isSnapshotLoading)) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card><CardHeader className="pb-2"><Skeleton className="h-4 w-28" /></CardHeader><CardContent><Skeleton className="h-10 w-20" /><Skeleton className="mt-2 h-3 w-32" /></CardContent></Card>
+          <Card><CardHeader className="pb-2"><Skeleton className="h-4 w-28" /></CardHeader><CardContent><Skeleton className="h-10 w-28" /><Skeleton className="mt-2 h-3 w-24" /></CardContent></Card>
+          <Card><CardHeader className="pb-2"><Skeleton className="h-4 w-28" /></CardHeader><CardContent><Skeleton className="h-10 w-28" /><Skeleton className="mt-2 h-3 w-24" /></CardContent></Card>
+        </div>
+      )}
 
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

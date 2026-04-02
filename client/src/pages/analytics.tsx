@@ -402,11 +402,11 @@ export default function Analytics() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="space-y-8">
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-4xl font-bold">Analytics</h1>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Analytics</h1>
             <Badge variant={wsConnected ? "default" : "destructive"} className="animate-pulse">
               {wsConnected ? "Live" : "Offline"}
             </Badge>

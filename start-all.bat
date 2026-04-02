@@ -1,5 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
+REM Ensure script runs from project root regardless of launch location
+cd /d "%~dp0"
 title Queue Detection System - Starting All Services
 color 0A
 

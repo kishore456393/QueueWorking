@@ -477,7 +477,9 @@ export type Language = keyof typeof translations;
 export type TranslationKey = keyof typeof translations['en'];
 
 export function t(lang: Language, key: TranslationKey, params?: Record<string, any>): string {
-  const translation = translations[lang]?.[key] || translations['en'][key];
+  const translation =
+    (translations[lang] as Record<TranslationKey, unknown>)[key] ??
+    translations["en"][key];
   
   if (typeof translation === 'function' && params) {
     const values = Object.values(params) as any[];

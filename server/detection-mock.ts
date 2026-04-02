@@ -110,7 +110,7 @@ export function getCurrentVideoId(): string | null {
 
 // Auto-start demo detection (opt-in via env var DEMO_DETECTION=true)
 export async function initializeDemoDetection() {
-  const videos = await storage.getAllVideos();
+  const videos = await storage.getAllSystemVideos();
   if (videos.length > 0) {
     const video = videos[0];
     const zones = await storage.getQueueZonesByVideo(video.id);
@@ -124,10 +124,18 @@ export async function initializeDemoDetection() {
     }
   }
 
-  // Create demo data if nothing exists
-  const demoVideo = await storage.createVideo({
-    filename: 'demo-video.mp4',
-    filepath: '/demo/demo-video.mp4',
+  const owner =
+    (await storage.getUserByUsername("admin")) ??
+    (await storage.getAllUsers())[0];
+  if (!owner) {
+    console.warn("initializeDemoDetection: no user found; cannot create demo video");
+    return;
+  }
+
+  const demoVideo = await storage.createVideo(owner.id, {
+    filename: "demo-video.mp4",
+    filepath: "/demo/demo-video.mp4",
+    sourceType: "file",
   });
 
   for (let i = 0; i < 5; i++) {

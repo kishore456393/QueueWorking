@@ -1,88 +1,149 @@
 # 🎯 QueueGuidance - AI Queue Detection & Management System
 
-A smart queue management system that uses AI to detect people in queues, estimate wait times, and provide real-time analytics.
-
-![Dashboard Preview](https://raw.githubusercontent.com/kishore456393/QueueWorking/main/preview.png)
+A smart queue management system that uses AI (YOLOv8) to detect people in queues, estimate wait times, and provide real-time analytics.
 
 ## ✨ Features
 
-- **Real-time Detection**: Uses YOLOv8 to detect people in video feeds or live cameras.
-- **Queue Analytics**: Tracks queue length, wait times, and identifies the fastest/slowest queues.
-- **Live Dashboard**: Interactive dashboard with real-time charts and visual overlays.
-- **Audio Announcements**: Multi-language voice announcements for queue guidance.
-- **Mobile Access**: Scan a QR code to view the live dashboard on your phone.
-- **Privacy Focused**: User-scoped feeds and automatic data cleanup.
-- **Secure**: Session-based authentication and secure password storage.
+- **Real-time Queue Detection** - YOLOv8-powered AI detects people in video feeds or live cameras
+- **Queue Analytics** - Track queue lengths, wait times, identify fastest/slowest queues
+- **Live Dashboard** - Interactive charts, real-time updates, and visual overlays
+- **Audio Announcements** - Multi-language voice guidance for queue management
+- **Mobile Access** - QR code sharing for viewing on mobile devices
+- **Dark/Light Mode** - Beautiful UI with theme support
+- **Secure Authentication** - Supabase Auth with Google OAuth support
 
-## 🚀 Quick Start (Windows)
+## 🛠️ Tech Stack
 
-1.  **Prerequisites**:
-    - [Node.js](https://nodejs.org/) (v18+)
-    - [Python](https://www.python.org/) (v3.10+)
-    - [MySQL Server](https://dev.mysql.com/downloads/mysql/)
+- **Frontend**: React 18, TypeScript, Tailwind CSS, Shadcn/ui
+- **Backend**: Node.js, Express, Drizzle ORM
+- **Database**: Supabase (PostgreSQL)
+- **Auth**: Supabase Auth + Google OAuth
+- **AI Detection**: Python, YOLOv8 (Ultralytics)
+- **Build Tool**: Vite
 
-2.  **Setup**:
-    - Clone the repository.
-    - Create a database named `artistry_edu` in MySQL.
-    - Copy `.env.example` to `.env` and update `DATABASE_URL` with your MySQL password.
-    - Run `start-all.bat`.
+## 🚀 Quick Start
 
-3.  **That's it!** The script will:
-    - Install all dependencies (Node & Python).
-    - Setup the database tables.
-    - Start the Backend, Frontend, and AI Detector.
-    - Open the dashboard in your browser.
+### Prerequisites
 
-## 📚 Documentation
+- [Node.js](https://nodejs.org/) v18+
+- [Python](https://www.python.org/) v3.10+
+- [Supabase](https://supabase.com/) account
 
-- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Detailed guide on installation, database setup, and deploying to other computers.
-- **[PRIVACY.md](PRIVACY.md)**: Information about data handling and privacy features.
+### 1. Clone & Install
 
-## 🛠️ Manual Installation
+```bash
+git clone https://github.com/kishore456393/QueueWorking.git
+cd QueueWorking
+npm install
+pip install -r requirements.txt
+```
 
-If you prefer to run things manually or are on Linux/Mac:
+### 2. Configure Environment
 
-1.  **Install Node Dependencies**:
-    ```bash
-    npm install
-    ```
+Copy `.env.example` to `.env` and fill in your Supabase credentials:
 
-2.  **Install Python Dependencies**:
-    ```bash
-    pip install -r detector/requirements.txt
-    ```
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-3.  **Database Setup**:
-    ```bash
-    npm run db:push
-    ```
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
 
-4.  **Run Development Server**:
-    ```bash
-    npm run dev
-    ```
+PORT=5000
+NODE_ENV=development
+```
 
-5.  **Run Python Detector**:
-    ```bash
-    cd detector
-    python main.py
-    ```
+### 3. Supabase Setup
+
+1. Create a new Supabase project
+2. Enable **Google OAuth** in Authentication → Providers
+3. Add redirect URL: `https://your-domain.com` (or `http://localhost:5000` for dev)
+4. Create required tables in SQL Editor:
+
+```sql
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  username TEXT,
+  first_name TEXT,
+  last_name TEXT,
+  role TEXT DEFAULT 'user',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS queue_data (
+  id SERIAL PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  queue_name TEXT,
+  count INTEGER,
+  wait_time INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 4. Run Development Server
+
+```bash
+npm run dev
+```
+
+### 5. Run AI Detector (Optional)
+
+```bash
+cd detector
+python main.py
+```
+
+## 🌐 Deploy to Vercel
+
+### Frontend Deployment
+
+1. Push your code to GitHub
+2. Go to [vercel.com](https://vercel.com) and import your repository
+3. Configure build settings:
+   - **Framework Preset**: Vite
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist/public`
+4. Add environment variables:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+5. Deploy!
+
+### Backend (Serverless Functions)
+
+For full-stack deployment on Vercel, the Express backend runs as serverless functions. The build output is configured to work with Vercel's serverless architecture.
+
+## 📁 Project Structure
+
+```
+├── client/              # React frontend
+│   ├── src/
+│   │   ├── components/  # UI components
+│   │   ├── hooks/       # Custom React hooks
+│   │   ├── lib/         # Utilities
+│   │   └── pages/       # Page components
+├── server/              # Express backend
+├── shared/              # Shared types/schemas
+├── detector/            # Python YOLOv8 detector
+└── dist/                # Build output
+```
+
+## 🔧 Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run start` | Start production server |
+| `npm run check` | TypeScript type checking |
 
 ## 📱 Mobile Access
 
-1.  Open the Dashboard on your computer.
-2.  Click the **"Show QR Code"** button.
-3.  Scan the code with your phone (must be on the same Wi-Fi).
-4.  View live queue stats on your mobile device!
-
-## 🔧 Configuration
-
-You can configure the system via the **Dashboard** or `.env` file:
-
-- **Refresh Interval**: How often to update data (default: 2s).
-- **Audio Interval**: How often to make announcements (default: 30s).
-- **Language**: Choose from 10+ supported languages.
-- **Data Retention**: Old snapshots are deleted automatically after 1 minute to save space.
+1. Open the Dashboard
+2. Navigate to TV Mode or Dashboard
+3. Click **"Show QR Code"**
+4. Scan with your phone (same network)
 
 ## 🤝 Contributing
 
@@ -94,6 +155,7 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
-- **Ultralytics YOLOv8** for the AI model.
-- **Shadcn/ui** for the beautiful components.
-- **Drizzle ORM** for database management.
+- [Ultralytics YOLOv8](https://ultralytics.com/) - AI detection model
+- [Shadcn/ui](https://ui.shadcn.com/) - UI components
+- [Supabase](https://supabase.com/) - Backend as a Service
+- [Vercel](https://vercel.com/) - Deployment platform

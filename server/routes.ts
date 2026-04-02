@@ -11,7 +11,7 @@ import { insertVideoSchema, insertQueueZoneSchema, insertDetectionSnapshotSchema
 import { startMockDetection, stopMockDetection, isDetectionRunning, setUpdateCallback, getCurrentVideoId as getMockVideoId } from "./detection-mock";
 import { startYoloDetection, stopYoloDetection, isYoloRunning, setYoloUpdateCallback, getCurrentVideoId as getYoloVideoId } from "./detection-yolo";
 import { captureStreamFrame, validateStreamUrl } from "./stream-capture";
-import { setupAuth } from "./auth";
+import { attachSupabaseUser, requireSupabaseAuth } from "./supabase-auth";
 
 // ... (rest of imports)
 
@@ -48,14 +48,11 @@ const upload = multer({
 });
 
 function isAuthenticated(req: any, res: any, next: any) {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  res.status(401).json({ message: "Unauthorized" });
+  return requireSupabaseAuth(req, res, next);
 }
 
 function isAdmin(req: any, res: any, next: any) {
-  if (req.isAuthenticated() && req.user.role === 'admin') {
+  if (req.user && req.user.role === 'admin') {
     return next();
   }
   res.status(403).json({ message: "Forbidden" });
@@ -64,7 +61,8 @@ function isAdmin(req: any, res: any, next: any) {
 const wsClients = new Set<WebSocket>();
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  setupAuth(app);
+  // Attach Supabase user (if Bearer token present) and hydrate req.user.
+  app.use(attachSupabaseUser);
 
   app.post("/api/register", async (req, res, next) => {
     try {
@@ -98,34 +96,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err: any, user: any, info: any) => {
-      if (err) {
-        console.error("Login error (authenticate):", err);
-        return next(err);
-      }
-      if (!user) {
-        console.warn("Login failed (invalid credentials):", info);
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-      req.login(user, (err) => {
-        if (err) {
-          console.error("Login error (req.login):", err);
-          return next(err);
-        }
-        res.json(user);
-      });
-    })(req, res, next);
+    // Supabase Auth is handled on the client. Keep endpoint for backwards compatibility.
+    // If a Supabase Bearer token is provided, return the hydrated app user.
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    return res.json(req.user);
   });
 
   app.post("/api/logout", (req, res, next) => {
     // Stop any running detection to prevent data leakage to next session
     stopMockDetection();
     stopYoloDetection();
-
-    req.logout((err) => {
-      if (err) return next(err);
-      res.sendStatus(200);
-    });
+    // Supabase logout occurs client-side. Keep endpoint for compatibility.
+    res.sendStatus(200);
   });
 
   app.post("/api/admin/reset", async (req, res) => {
@@ -144,7 +126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (!req.user) return res.sendStatus(401);
     res.json(req.user);
   });
 

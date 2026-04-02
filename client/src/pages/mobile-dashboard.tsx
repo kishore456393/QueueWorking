@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -156,34 +156,30 @@ export default function MobileDashboard() {
         fill: index + 1 === displayData.bestQueue ? '#10b981' : index + 1 === displayData.worstQueue ? '#ef4444' : '#6366f1'
     })) || [];
 
-    const freshnessMinutes = displayData ? Math.floor((Date.now() - new Date(displayData.timestamp).getTime()) / 1000 / 60) : null;
-    const isFresh = freshnessMinutes !== null && freshnessMinutes < 1;
-    const isRecent = freshnessMinutes !== null && freshnessMinutes < 5;
-
     return (
-        <div className="max-w-7xl mx-auto px-4 py-6">
-            <div className="flex flex-col gap-4 mb-6">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <h1 className="text-2xl font-bold mb-1">{t(selectedLanguage as Language, 'liveDashboard')}</h1>
+        <div className="min-h-screen bg-background">
+            <div className="mx-auto max-w-lg px-4 py-6 space-y-6">
+            <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0">
+                        <h1 className="text-xl font-semibold tracking-tight mb-1">{t(selectedLanguage as Language, 'liveDashboard')}</h1>
                         <p className="text-muted-foreground text-sm">
                             {t(selectedLanguage as Language, 'realTimeAnalytics')}
                         </p>
                     </div>
-                    <div className="flex gap-2 items-center">
-                        <Badge variant={wsConnected ? "default" : "destructive"}>
-                            {wsConnected ? `🟢 ${t(selectedLanguage as Language, 'live')}` : `🔴 ${t(selectedLanguage as Language, 'offline')}`}
+                    <div className="flex shrink-0 items-center">
+                        <Badge variant={wsConnected ? "default" : "destructive"} className="tabular-nums">
+                            {wsConnected ? t(selectedLanguage as Language, 'live') : t(selectedLanguage as Language, 'offline')}
                         </Badge>
                     </div>
                 </div>
 
-                {/* Language Selector */}
                 <div className="w-full">
                     <Select
                         value={selectedLanguage}
                         onValueChange={setSelectedLanguage}
                     >
-                        <SelectTrigger className="w-full">
+                        <SelectTrigger className="w-full h-10">
                             <SelectValue placeholder={t(selectedLanguage as Language, 'selectLanguage')} />
                         </SelectTrigger>
                         <SelectContent>
@@ -197,10 +193,10 @@ export default function MobileDashboard() {
 
             {/* Video selector if multiple videos exist */}
             {videos && videos.length > 0 && (
-                <div className="mb-6">
-                    <Label className="mb-2 block">{t(selectedLanguage as Language, 'activeVideo')}</Label>
+                <div>
+                    <Label className="mb-2 block text-muted-foreground">{t(selectedLanguage as Language, 'activeVideo')}</Label>
                     <Select value={selectedVideoId} onValueChange={setSelectedVideoId}>
-                        <SelectTrigger className="w-full">
+                        <SelectTrigger className="w-full h-10">
                             <SelectValue placeholder={t(selectedLanguage as Language, 'selectVideo')} />
                         </SelectTrigger>
                         <SelectContent>
@@ -214,7 +210,7 @@ export default function MobileDashboard() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 mb-6">
+            <div className="grid grid-cols-1 gap-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">{t(selectedLanguage as Language, 'totalPeople')}</CardTitle>
@@ -234,10 +230,10 @@ export default function MobileDashboard() {
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4">
                             <CardTitle className="text-sm font-medium">{t(selectedLanguage as Language, 'bestQueue')}</CardTitle>
-                            <TrendingDown className="h-4 w-4 text-green-500" />
+                            <TrendingDown className="h-4 w-4 text-emerald-600" />
                         </CardHeader>
                         <CardContent className="px-4 pb-4">
-                            <div className="text-2xl font-bold text-green-500">
+                            <div className="text-2xl font-bold text-emerald-600">
                                 {t(selectedLanguage as Language, 'queue', { number: displayData?.bestQueue || '-' })}
                             </div>
                         </CardContent>
@@ -246,10 +242,10 @@ export default function MobileDashboard() {
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4">
                             <CardTitle className="text-sm font-medium">{t(selectedLanguage as Language, 'busiestQueue')}</CardTitle>
-                            <TrendingUp className="h-4 w-4 text-red-500" />
+                            <TrendingUp className="h-4 w-4 text-destructive" />
                         </CardHeader>
                         <CardContent className="px-4 pb-4">
-                            <div className="text-2xl font-bold text-red-500">
+                            <div className="text-2xl font-bold text-destructive">
                                 {t(selectedLanguage as Language, 'queue', { number: displayData?.worstQueue || '-' })}
                             </div>
                         </CardContent>
@@ -258,7 +254,7 @@ export default function MobileDashboard() {
             </div>
 
             {displayData && (
-                <Card className="mb-6 bg-primary/5 border-primary/20">
+                <Card className="border-primary/20 bg-primary/5">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Volume2 className="w-5 h-5" />
@@ -309,14 +305,14 @@ export default function MobileDashboard() {
                             return (
                                 <div
                                     key={index}
-                                    className={`flex items-center justify-between p-3 rounded-lg border ${isBest ? 'border-green-500 bg-green-500/10' :
-                                        isWorst ? 'border-red-500 bg-red-500/10' :
+                                    className={`flex items-center justify-between rounded-lg border p-3 ${isBest ? 'border-emerald-500/60 bg-emerald-500/5' :
+                                        isWorst ? 'border-destructive/50 bg-destructive/5' :
                                             'border-border'
                                         }`}
                                 >
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${isBest ? 'bg-green-500 text-white' :
-                                            isWorst ? 'bg-red-500 text-white' :
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${isBest ? 'bg-emerald-600 text-white' :
+                                            isWorst ? 'bg-destructive text-destructive-foreground' :
                                                 'bg-primary text-primary-foreground'
                                             }`}>
                                             {queueNum}
@@ -337,6 +333,7 @@ export default function MobileDashboard() {
                         })}
                     </CardContent>
                 </Card>
+            </div>
             </div>
         </div>
     );

@@ -29,9 +29,9 @@ export default function AdminProfile() {
     };
 
     return (
-        <div className="max-w-4xl mx-auto px-6 py-8">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold tracking-tight">Admin Profile</h1>
+        <div className="space-y-8">
+            <div>
+                <h1 className="text-3xl font-semibold tracking-tight">Profile</h1>
                 <p className="text-muted-foreground">
                     Manage your account settings and preferences.
                 </p>

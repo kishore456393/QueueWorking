@@ -1,46 +1,78 @@
-import { createContext, ReactNode, useContext } from "react";
-import { useQuery, useMutation, UseMutationResult } from "@tanstack/react-query";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, UseMutationResult } from "@tanstack/react-query";
 import { User } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getQueryFn, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { LoginInput, RegisterInput } from "@/schemas/auth";
+import { supabase } from "@/lib/supabaseClient";
+import type { Session } from "@supabase/supabase-js";
 
 type AuthContextType = {
-    user: User | null;
+    user: User | null; // hydrated app user (role, username, etc.)
+    session: Session | null;
     isLoading: boolean;
     error: Error | null;
-    loginMutation: UseMutationResult<User, Error, LoginInput>;
+    loginMutation: UseMutationResult<void, Error, LoginInput>;
+    googleLoginMutation: UseMutationResult<void, Error, void>;
     logoutMutation: UseMutationResult<void, Error, void>;
-    registerMutation: UseMutationResult<User, Error, RegisterInput>;
+    registerMutation: UseMutationResult<void, Error, RegisterInput>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const { toast } = useToast();
+    const [session, setSession] = useState<Session | null>(null);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        supabase.auth.getSession().then(({ data }) => {
+            if (!isMounted) return;
+            setSession(data.session ?? null);
+        });
+
+        const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+            setSession(newSession ?? null);
+        });
+
+        return () => {
+            isMounted = false;
+            sub.subscription.unsubscribe();
+        };
+    }, []);
+
+    const enabled = !!session?.access_token;
+    const queryFn = useMemo(() => getQueryFn<User | null>({ on401: "returnNull" }), []);
+
     const {
         data: user,
         error,
         isLoading,
-    } = useQuery<User | undefined, Error>({
+    } = useQuery<User | null, Error>({
         queryKey: ["/api/user"],
+        queryFn,
+        enabled,
         retry: false,
     });
 
     const loginMutation = useMutation({
         mutationFn: async (credentials: LoginInput) => {
-            const res = await apiRequest("POST", "/api/login", credentials);
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.message || "Login failed");
-            }
-            return await res.json();
+            const emailOrUsername = credentials.username.trim();
+            const email =
+                emailOrUsername.includes("@") ? emailOrUsername : `${emailOrUsername}@queueguidance.local`;
+
+            const { error } = await supabase.auth.signInWithPassword({
+                email,
+                password: credentials.password,
+            });
+            if (error) throw new Error(error.message);
         },
-        onSuccess: (user: User) => {
-            queryClient.setQueryData(["/api/user"], user);
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
             toast({
                 title: "Welcome back!",
-                description: `Signed in as ${user.username}`,
+                description: "You’re signed in.",
             });
         },
         onError: (error: Error) => {
@@ -52,32 +84,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
     });
 
+    const googleLoginMutation = useMutation({
+        mutationFn: async () => {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: "google",
+                options: {
+                    redirectTo: `${window.location.origin}/auth`,
+                },
+            });
+            if (error) throw new Error(error.message);
+        },
+        onError: (error: Error) => {
+            toast({
+                title: "Google sign-in failed",
+                description: error.message,
+                variant: "destructive",
+            });
+        },
+    });
+
     const registerMutation = useMutation({
         mutationFn: async (credentials: RegisterInput) => {
-            const res = await apiRequest("POST", "/api/register", credentials);
-            if (!res.ok) {
-                // Handle 409 Conflict specifically
-                if (res.status === 409) {
-                    const text = await res.text();
-                    throw new Error(text); // "Username already exists" or "Email already exists"
-                }
-                const error = await res.json();
-                throw new Error(error.message || "Registration failed");
-            }
-            return await res.json();
+            const email = credentials.email.trim().toLowerCase();
+            const { error } = await supabase.auth.signUp({
+                email,
+                password: credentials.password,
+                options: {
+                    data: {
+                        username: credentials.username,
+                        first_name: credentials.firstName ?? null,
+                        last_name: credentials.lastName ?? null,
+                    },
+                },
+            });
+            if (error) throw new Error(error.message);
         },
         onSuccess: () => {
-            // Note: The original implementation didn't auto-login after register, but typically you might want to.
-            // For now, we'll stick to the existing flow or the user's request.
-            // The user request says "returns { user: {...}, token } on success", implying auto-login might be expected or just return data.
-            // However, the previous auth.tsx switched to login tab.
-            // Let's assume we want to auto-login or at least invalidate user query if the backend sets a session.
-            // If the backend sets a session on register, we should update the query cache.
-            // The current backend /api/register does NOT log the user in, it just creates them.
-            // So we won't setQueryData here.
             toast({
                 title: "Account created",
-                description: "Please sign in with your new account.",
+                description: "Check your email to confirm, then sign in.",
             });
         },
         onError: (error: Error) => {
@@ -91,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const logoutMutation = useMutation({
         mutationFn: async () => {
-            await apiRequest("POST", "/api/logout");
+            await supabase.auth.signOut();
         },
         onSuccess: () => {
             queryClient.clear();
@@ -113,9 +158,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         <AuthContext.Provider
             value={{
                 user: user ?? null,
+                session,
                 isLoading,
                 error,
                 loginMutation,
+                googleLoginMutation,
                 logoutMutation,
                 registerMutation,
             }

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { supabase } from "@/lib/supabaseClient";
 import { type Video, type QueueZone } from "@shared/schema";
 import { Upload, Edit3, Play, CheckCircle2, Camera, Video as VideoIcon, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -46,8 +47,14 @@ export default function Setup() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('video', file);
+      
+      // Get auth token for the request
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      
       const response = await fetch('/api/videos', {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
       if (!response.ok) throw new Error('Upload failed');
@@ -460,10 +467,10 @@ export default function Setup() {
   const progress = uploadedVideo ? (polygons.length > 0 ? 100 : 50) : videoFile ? 25 : 0;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Setup & Process</h1>
-        <p className="text-muted-foreground text-lg">
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Setup</h1>
+        <p className="mt-2 text-lg text-muted-foreground">
           Upload video, define queue zones, and start AI detection
         </p>
       </div>
@@ -477,13 +484,13 @@ export default function Setup() {
           <Progress value={progress} className="mb-4" data-testid="progress-setup" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center gap-3">
-              {uploadedVideo ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <Upload className="w-5 h-5 text-muted-foreground" />}
+              {uploadedVideo ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <Upload className="w-5 h-5 text-muted-foreground" />}
               <span className={uploadedVideo ? "text-foreground font-medium" : "text-muted-foreground"}>
                 1. Upload Video
               </span>
             </div>
             <div className="flex items-center gap-3">
-              {polygons.length > 0 ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <Edit3 className="w-5 h-5 text-muted-foreground" />}
+              {polygons.length > 0 ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <Edit3 className="w-5 h-5 text-muted-foreground" />}
               <span className={polygons.length > 0 ? "text-foreground font-medium" : "text-muted-foreground"}>
                 2. Draw Queue Zones
               </span>

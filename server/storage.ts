@@ -9,6 +9,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import { randomUUID } from "crypto";
 import { MySQLStorage } from "./mysql-storage";
+import { SupabaseStorage } from "./supabase-storage";
 
 const MemoryStore = createMemoryStore(session);
 
@@ -259,7 +260,7 @@ export class MemStorage implements IStorage {
     const cutoff = new Date(now.getTime() - ageInSeconds * 1000);
     let count = 0;
 
-    for (const [id, snapshot] of this.detectionSnapshots.entries()) {
+    for (const [id, snapshot] of Array.from(this.detectionSnapshots.entries())) {
       if (snapshot.timestamp < cutoff) {
         this.detectionSnapshots.delete(id);
         count++;
@@ -269,14 +270,17 @@ export class MemStorage implements IStorage {
   }
 }
 
-// Use MySQL storage if DATABASE_URL is configured, otherwise fall back to memory storage
+// Prefer Supabase Postgres if configured, else fall back.
 let storage: IStorage;
 
-if (process.env.DATABASE_URL) {
-  console.log("✅ Using MySQL database storage");
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.log("✅ Using Supabase Postgres storage");
+  storage = new SupabaseStorage();
+} else if (process.env.DATABASE_URL) {
+  console.log("✅ Using MySQL database storage (legacy)");
   storage = new MySQLStorage();
 } else {
-  console.warn("⚠️  DATABASE_URL not set - using in-memory storage (data will be lost on restart)");
+  console.warn("⚠️  No database configured - using in-memory storage (data will be lost on restart)");
   storage = new MemStorage();
 }
 
