@@ -114,6 +114,31 @@ python main.py
 
 For full-stack deployment on Vercel, the Express backend runs as serverless functions. The build output is configured to work with Vercel's serverless architecture.
 
+For non-local deployments where the Python detector runs on a separate host, set:
+
+- `DETECTOR_BASE_URL` (example: `https://your-detector-service.onrender.com`)
+- `VITE_DETECTOR_BASE_URL` (same value as detector base URL for browser TTS)
+
+Backend environment variables to set in production:
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SESSION_SECRET`
+- `DETECTOR_BASE_URL`
+- `CORS_ORIGINS` (comma-separated frontend origins, e.g. your Vercel URL)
+
+Detector service environment variables:
+
+- `CORS_ORIGINS` (comma-separated frontend origins)
+
+Frontend (Vercel) environment variables:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_DETECTOR_BASE_URL`
+- `VITE_API_BASE_URL` (your backend public URL)
+
 ## 📁 Project Structure
 
 ```

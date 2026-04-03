@@ -1,7 +1,9 @@
 export async function playTextToSpeech(text: string, language: string = 'en'): Promise<void> {
+  const detectorBaseUrl = (import.meta.env.VITE_DETECTOR_BASE_URL as string | undefined)?.replace(/\/$/, '') || 'http://127.0.0.1:8000';
+
   // Try server TTS first (Google TTS - works reliably with all languages)
   try {
-    const response = await fetch('http://127.0.0.1:8000/tts', {
+    const response = await fetch(`${detectorBaseUrl}/tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, language }),

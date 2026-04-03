@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getApiUrl } from "@/lib/api";
 import { supabase } from "@/lib/supabaseClient";
 import { type Video, type QueueZone } from "@shared/schema";
 import { Upload, Edit3, Play, CheckCircle2, Camera, Video as VideoIcon, Trash2 } from "lucide-react";
@@ -52,7 +53,7 @@ export default function Setup() {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
       
-      const response = await fetch('/api/videos', {
+      const response = await fetch(getApiUrl('/api/videos'), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,

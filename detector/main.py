@@ -1,5 +1,6 @@
 import base64
 import io
+import os
 from typing import List, Dict, Any
 
 import numpy as np
@@ -13,10 +14,15 @@ from tts_service import text_to_speech_base64
 
 app = FastAPI()
 
+default_origins = ["http://localhost:5000", "http://127.0.0.1:5000"]
+cors_origins_raw = os.getenv("CORS_ORIGINS", "")
+cors_origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
+allow_origins = cors_origins if cors_origins else default_origins
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5000", "http://127.0.0.1:5000"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

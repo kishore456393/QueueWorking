@@ -1,6 +1,10 @@
 import { spawn } from "child_process";
 import ffmpegPath from "ffmpeg-static";
 
+function getDetectorBaseUrl(): string {
+  return (process.env.DETECTOR_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+}
+
 /**
  * Capture a single frame from a live video stream (RTSP, HTTP, Webcam)
  * Returns the frame as a base64-encoded JPEG
@@ -10,8 +14,9 @@ export async function captureStreamFrame(streamUrl: string): Promise<string> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const detectorBaseUrl = getDetectorBaseUrl();
 
-    const response = await fetch("http://127.0.0.1:8000/capture", {
+    const response = await fetch(`${detectorBaseUrl}/capture`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source: streamUrl }),

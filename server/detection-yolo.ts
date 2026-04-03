@@ -10,6 +10,10 @@ let currentVideoId: string | null = null;
 let currentSecond = 0;
 let onUpdateCallback: ((snapshot: DetectionSnapshot) => void) | null = null;
 
+function getDetectorBaseUrl(): string {
+  return (process.env.DETECTOR_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+}
+
 export function setYoloUpdateCallback(callback: (snapshot: DetectionSnapshot) => void): void {
   onUpdateCallback = callback;
 }
@@ -58,7 +62,8 @@ async function postToDetector(imageB64: string, polygons: Array<Array<{ x: numbe
     polygons: polygons.map((pts) => ({ points: pts })),
     conf: 0.07,
   };
-  const res = await fetch("http://127.0.0.1:8000/detect", {
+  const detectorBaseUrl = getDetectorBaseUrl();
+  const res = await fetch(`${detectorBaseUrl}/detect`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -83,7 +88,8 @@ export function getCurrentVideoId(): string | null {
 export async function checkDetectorHealth(): Promise<boolean> {
   try {
     // Simple health check or just try to hit the root/docs
-    const res = await fetch("http://127.0.0.1:8000/docs", { method: "HEAD" });
+    const detectorBaseUrl = getDetectorBaseUrl();
+    const res = await fetch(`${detectorBaseUrl}/docs`, { method: "HEAD" });
     return res.ok;
   } catch (e) {
     return false;
@@ -96,7 +102,7 @@ export async function startYoloDetection(params: { videoId: string; updateInterv
   // Fail fast if detector is not running
   const isHealthy = await checkDetectorHealth();
   if (!isHealthy) {
-    throw new Error("YOLO detector service is not reachable at http://127.0.0.1:8000");
+    throw new Error(`YOLO detector service is not reachable at ${getDetectorBaseUrl()}`);
   }
 
   const { videoId, updateInterval = 2000 } = params;

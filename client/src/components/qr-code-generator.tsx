@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { QrCode, Smartphone, X, Copy, Check } from "lucide-react";
 import QRCode from "react-qr-code";
 import { useToast } from "@/hooks/use-toast";
+import { getApiUrl } from "@/lib/api";
 
 export function QRCodeGenerator() {
   const [showQR, setShowQR] = useState(false);
@@ -20,7 +21,7 @@ export function QRCodeGenerator() {
     // Fetch network IP and check for ngrok URL
     const fetchNetworkIP = async () => {
       try {
-        const response = await fetch('/api/network-ip');
+        const response = await fetch(getApiUrl('/api/network-ip'));
         const data = await response.json();
         setNetworkIP(data.ip);
         // Point to guest login endpoint which redirects to mobile-live
@@ -94,7 +95,7 @@ export function QRCodeGenerator() {
     // Fetch fresh ngrok URL via backend proxy
     try {
       console.log('🔍 Fetching Ngrok tunnels via /api/ngrok-tunnels');
-      const ngrokResponse = await fetch('/api/ngrok-tunnels');
+      const ngrokResponse = await fetch(getApiUrl('/api/ngrok-tunnels'));
 
       console.log('📡 Ngrok response status:', ngrokResponse.status);
 
