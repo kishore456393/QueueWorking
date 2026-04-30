@@ -1,9 +1,9 @@
-import { mysqlTable, text, int, boolean, timestamp, json, varchar, longtext } from "drizzle-orm/mysql-core";
+import { pgTable, text, integer, boolean, timestamp, jsonb, varchar, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = mysqlTable("users", {
-  id: int("id").primaryKey().autoincrement(),
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   firstName: text("first_name"),
@@ -17,13 +17,13 @@ export const selectUserSchema = createSelectSchema(users);
 export type User = z.infer<typeof selectUserSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
-export const videos = mysqlTable("videos", {
+export const videos = pgTable("videos", {
   id: varchar("id", { length: 36 }).primaryKey(),
   filename: text("filename").notNull(),
   filepath: text("filepath").notNull(),
   sourceType: text("source_type").notNull().default("file"), // "file", "rtsp", "http", or "webcam"
   streamUrl: text("stream_url"), // URL for live streams
-  userId: int("user_id").notNull().references(() => users.id),
+  userId: integer("user_id").notNull().references(() => users.id),
   originalName: text("original_name"),
   uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
 });
@@ -33,11 +33,11 @@ export type InsertVideo = z.infer<typeof insertVideoSchema>;
 export type Video = typeof videos.$inferSelect;
 
 // Queue Zones table - stores polygon definitions for queue areas
-export const queueZones = mysqlTable("queue_zones", {
+export const queueZones = pgTable("queue_zones", {
   id: varchar("id", { length: 36 }).primaryKey(),
   videoId: varchar("video_id", { length: 36 }).notNull().references(() => videos.id),
-  queueNumber: int("queue_number").notNull(),
-  polygonPoints: json("polygon_points").$type<Array<{ x: number, y: number }>>().notNull(),
+  queueNumber: integer("queue_number").notNull(),
+  polygonPoints: jsonb("polygon_points").$type<Array<{ x: number, y: number }>>().notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -46,18 +46,18 @@ export type InsertQueueZone = z.infer<typeof insertQueueZoneSchema>;
 export type QueueZone = typeof queueZones.$inferSelect;
 
 // Detection Snapshots - stores detection results over time
-export const detectionSnapshots = mysqlTable("detection_snapshots", {
+export const detectionSnapshots = pgTable("detection_snapshots", {
   id: varchar("id", { length: 36 }).primaryKey(),
   videoId: varchar("video_id", { length: 36 }).notNull().references(() => videos.id),
   timestamp: timestamp("timestamp").notNull().defaultNow(),
-  totalQueues: int("total_queues").notNull(),
-  queueCounts: json("queue_counts").$type<number[]>().notNull(),
-  totalPeople: int("total_people").notNull(),
-  bestQueue: int("best_queue").notNull(),
-  worstQueue: int("worst_queue").notNull(),
+  totalQueues: integer("total_queues").notNull(),
+  queueCounts: jsonb("queue_counts").$type<number[]>().notNull(),
+  totalPeople: integer("total_people").notNull(),
+  bestQueue: integer("best_queue").notNull(),
+  worstQueue: integer("worst_queue").notNull(),
   recommendation: text("recommendation").notNull(),
-  frameData: longtext("frame_data"), // Base64 encoded frame image (LONGTEXT for >64KB)
-  detections: json("detections").$type<Array<{ x: number, y: number }>>(), // Center points of detected people
+  frameData: text("frame_data"), // Base64 encoded frame image
+  detections: jsonb("detections").$type<Array<{ x: number, y: number }>>(), // Center points of detected people
 });
 
 export const insertDetectionSnapshotSchema = createInsertSchema(detectionSnapshots).omit({ id: true, timestamp: true });
@@ -65,12 +65,12 @@ export type InsertDetectionSnapshot = z.infer<typeof insertDetectionSnapshotSche
 export type DetectionSnapshot = typeof detectionSnapshots.$inferSelect;
 
 // Settings table - stores user preferences
-export const settings = mysqlTable("settings", {
+export const settings = pgTable("settings", {
   id: varchar("id", { length: 36 }).primaryKey(),
   language: text("language").notNull().default('en'),
   audioEnabled: boolean("audio_enabled").notNull().default(false),
-  audioInterval: int("audio_interval").notNull().default(30), // seconds
-  refreshInterval: int("refresh_interval").notNull().default(2), // seconds
+  audioInterval: integer("audio_interval").notNull().default(30), // seconds
+  refreshInterval: integer("refresh_interval").notNull().default(2), // seconds
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

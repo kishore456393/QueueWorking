@@ -10,7 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from ultralytics import YOLO
 from PIL import Image
-from tts_service import text_to_speech_base64
+try:
+    from .tts_service import text_to_speech_base64
+except ImportError:
+    # Allows running as a script: `python detector/main.py`
+    from tts_service import text_to_speech_base64
 
 app = FastAPI()
 

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -10,13 +10,10 @@ async function clearData() {
             throw new Error("DATABASE_URL not found in .env");
         }
 
-        // Parse connection string (mysql://user:pass@host:port/db)
-        // Or just use the URL directly if mysql2 supports it (it does)
-        const connection = await mysql.createConnection(dbUrl);
+        const client = new pg.Client({ connectionString: dbUrl });
+        await client.connect();
 
         console.log("Connected to database. Clearing data...");
-
-        await connection.query('SET FOREIGN_KEY_CHECKS = 0');
 
         const tables = [
             'detection_snapshots',
@@ -29,18 +26,17 @@ async function clearData() {
 
         for (const table of tables) {
             try {
-                await connection.query(`TRUNCATE TABLE \`${table}\``);
+                await client.query(`TRUNCATE TABLE "${table}" CASCADE`);
                 console.log(`Cleared table: ${table}`);
             } catch (e: any) {
                 // If table doesn't exist, ignore
-                if (e.code !== 'ER_NO_SUCH_TABLE') {
+                if (e.code !== '42P01') { // PostgreSQL error code for undefined_table
                     console.error(`Error clearing ${table}:`, e.message);
                 }
             }
         }
 
-        await connection.query('SET FOREIGN_KEY_CHECKS = 1');
-        await connection.end();
+        await client.end();
 
         // Clear uploads folder
         const uploadsDir = path.join(process.cwd(), 'uploads');

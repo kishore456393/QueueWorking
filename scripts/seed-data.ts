@@ -1,21 +1,29 @@
 import "dotenv/config";
-import { db } from "../server/db";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { videos, queueZones, detectionSnapshots, users } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 async function seedData() {
     try {
+        if (!process.env.DATABASE_URL) {
+            throw new Error("DATABASE_URL not found in .env");
+        }
+
+        const connection = postgres(process.env.DATABASE_URL);
+        const db = drizzle(connection);
+
         console.log("🌱 Seeding dummy data...");
 
         // Create a dummy user
-        const [userResult] = await db.insert(users).values({
+        const userResult = await db.insert(users).values({
             username: "admin",
             password: "password", // Dummy password
             role: "admin",
             firstName: "Admin",
             lastName: "User",
-        });
-        const userId = userResult.insertId;
+        }).returning();
+        const userId = userResult[0].id;
         console.log("Created user:", userId);
 
         // Create a dummy video
@@ -60,6 +68,9 @@ async function seedData() {
             detections: [{ x: 50, y: 50 }, { x: 250, y: 50 }],
         });
         console.log("Created detection snapshot");
+
+        // Close connection
+        await connection.end();
 
         console.log("✅ Seeding complete!");
         process.exit(0);

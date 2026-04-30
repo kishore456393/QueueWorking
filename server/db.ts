@@ -1,17 +1,15 @@
-import { drizzle } from "drizzle-orm/mysql2";
-import mysql from "mysql2/promise";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "@shared/schema";
 
-// Create MySQL connection pool
-const poolConnection = mysql.createPool({
-    uri: process.env.DATABASE_URL,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-});
+// Create PostgreSQL connection only if DATABASE_URL is set
+let connection: ReturnType<typeof postgres> | null = null;
+let db: ReturnType<typeof drizzle> | null = null;
 
-// Create Drizzle database instance
-export const db = drizzle(poolConnection, { schema, mode: "default" });
+if (process.env.DATABASE_URL) {
+    connection = postgres(process.env.DATABASE_URL);
+    db = drizzle(connection, { schema });
+}
 
-// Export pool for session store
-export const pool = poolConnection;
+// Export connection for session store
+export { db, connection as pgConnection };

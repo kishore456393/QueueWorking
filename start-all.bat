@@ -44,14 +44,14 @@ for /f "tokens=5" %%a in ('netstat -aon ^| find ":8000" ^| find "LISTENING"') do
 echo   [OK] Ports cleared
 echo.
 
-REM Check MySQL Service (Basic check)
-echo [CHECK] Verifying MySQL connection...
-net start | find "MySQL" >nul
+REM Check Database URL (Basic check)
+echo [CHECK] Verifying database configuration...
+findstr /C:"DATABASE_URL" .env >nul 2>&1
 if %errorlevel% neq 0 (
-    echo   [WARN] MySQL service might not be running.
-    echo   Please ensure MySQL is started in Services or XAMPP/Workbench.
+    echo   [WARN] DATABASE_URL not found in .env file.
+    echo   Please add your Supabase connection string to .env
 ) else (
-    echo   [OK] MySQL service detected
+    echo   [OK] Database configuration found
 )
 echo.
 

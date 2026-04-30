@@ -8,8 +8,7 @@ import {
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { randomUUID } from "crypto";
-import { MySQLStorage } from "./mysql-storage";
-import { SupabaseStorage } from "./supabase-storage";
+import { PostgresStorage } from "./postgres-storage";
 
 const MemoryStore = createMemoryStore(session);
 
@@ -17,6 +16,7 @@ export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   sessionStore: session.Store;
@@ -73,6 +73,12 @@ export class MemStorage implements IStorage {
   async getUserByUsername(username: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find(
       (user) => user.username === username || user.email === username,
+    );
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.email === email,
     );
   }
 
@@ -260,7 +266,7 @@ export class MemStorage implements IStorage {
     const cutoff = new Date(now.getTime() - ageInSeconds * 1000);
     let count = 0;
 
-    for (const [id, snapshot] of Array.from(this.detectionSnapshots.entries())) {
+    for (const [id, snapshot] of this.detectionSnapshots.entries()) {
       if (snapshot.timestamp < cutoff) {
         this.detectionSnapshots.delete(id);
         count++;
@@ -270,17 +276,14 @@ export class MemStorage implements IStorage {
   }
 }
 
-// Prefer Supabase Postgres if configured, else fall back.
+// Use PostgreSQL storage if DATABASE_URL is configured, otherwise fall back to memory storage
 let storage: IStorage;
 
-if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.log("✅ Using Supabase Postgres storage");
-  storage = new SupabaseStorage();
-} else if (process.env.DATABASE_URL) {
-  console.log("✅ Using MySQL database storage (legacy)");
-  storage = new MySQLStorage();
+if (process.env.DATABASE_URL) {
+  console.log("✅ Using PostgreSQL database storage (Supabase)");
+  storage = new PostgresStorage();
 } else {
-  console.warn("⚠️  No database configured - using in-memory storage (data will be lost on restart)");
+  console.warn("⚠️  DATABASE_URL not set - using in-memory storage (data will be lost on restart)");
   storage = new MemStorage();
 }
 
