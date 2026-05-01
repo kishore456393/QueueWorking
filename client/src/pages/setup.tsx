@@ -57,6 +57,7 @@ export default function Setup() {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
+        credentials: 'include',
       });
       if (!response.ok) throw new Error('Upload failed');
       return response.json();
@@ -75,21 +76,28 @@ export default function Setup() {
 
   const saveZonesMutation = useMutation({
     mutationFn: async (zones: { videoId: string; polygons: Polygon[] }) => {
-      // First delete existing zones to avoid duplicates
-      await apiRequest('DELETE', `/api/queue-zones/${zones.videoId}`);
+      try {
+        // First delete existing zones to avoid duplicates
+        await apiRequest('DELETE', `/api/queue-zones/${zones.videoId}`);
 
-      const promises = zones.polygons.map((polygon, index) =>
-        apiRequest('POST', '/api/queue-zones', {
-          videoId: zones.videoId,
-          queueNumber: index + 1,
-          polygonPoints: polygon,
-        })
-      );
-      // Ensure all API calls resolve or throw
-      await Promise.all(promises.map(p => p.then(r => r.json())));
+        // Save new zones
+        const savePromises = zones.polygons.map((polygon, index) =>
+          apiRequest('POST', '/api/queue-zones', {
+            videoId: zones.videoId,
+            queueNumber: index + 1,
+            polygonPoints: polygon,
+          })
+        );
 
-      // Start detection after zones are saved
-      return apiRequest('POST', `/api/detection/start/${zones.videoId}`);
+        // Wait for all zone saves to complete
+        await Promise.all(savePromises);
+
+        // Start detection after zones are saved
+        await apiRequest('POST', `/api/detection/start/${zones.videoId}`);
+      } catch (error) {
+        console.error('Error saving zones:', error);
+        throw error;
+      }
     },
     onSuccess: async () => {
       toast({
@@ -149,7 +157,13 @@ export default function Setup() {
 
   const deleteVideoMutation = useMutation({
     mutationFn: async (videoId: string) => {
-      await apiRequest('DELETE', `/api/videos/${videoId}`);
+      try {
+        const response = await apiRequest('DELETE', `/api/videos/${videoId}`);
+        return await response.json();
+      } catch (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       setUploadedVideo(null);
@@ -160,10 +174,12 @@ export default function Setup() {
         description: "Video source removed successfully",
       });
     },
-    onError: () => {
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Could not remove video source';
+      console.error('Delete failed:', message);
       toast({
         title: "Delete failed",
-        description: "Could not remove video source",
+        description: message,
         variant: "destructive",
       });
     },

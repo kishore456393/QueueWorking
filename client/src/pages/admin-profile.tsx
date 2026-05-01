@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +12,21 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AdminProfile() {
-    const { user } = useAuth();
+    const { user: legacyUser } = useAuth();
+    const { user: supabaseUser } = useSupabaseAuth();
     const { toast } = useToast();
     const [isEditing, setIsEditing] = useState(false);
+
+    // Use either legacy user or Supabase user
+    const user = legacyUser || (supabaseUser ? {
+        id: 0,
+        username: supabaseUser.email || 'user',
+        email: supabaseUser.email,
+        firstName: supabaseUser.user_metadata?.first_name,
+        lastName: supabaseUser.user_metadata?.last_name,
+        role: 'viewer' as const,
+        password: '',
+    } : null);
 
     if (!user) return null;
 

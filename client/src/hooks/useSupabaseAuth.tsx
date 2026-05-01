@@ -43,19 +43,44 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             setUser(session?.user ?? null);
+            // Sync with local database if user exists
+            if (session?.user) {
+                syncUserWithBackend(session.user.email || '', session.user.id);
+            }
             setIsLoading(false);
         });
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            (_event, session) => {
+            async (_event, session) => {
                 setSession(session);
                 setUser(session?.user ?? null);
+                // Sync with local database on auth state change
+                if (session?.user) {
+                    await syncUserWithBackend(session.user.email || '', session.user.id);
+                }
             }
         );
 
         return () => subscription.unsubscribe();
     }, []);
+
+    const syncUserWithBackend = async (email: string, supabaseUserId: string) => {
+        try {
+            const response = await fetch('/api/auth/supabase-sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ email, userId: supabaseUserId }),
+            });
+            if (!response.ok) {
+                console.error('Failed to sync user with backend');
+            }
+        } catch (error) {
+            console.error('Sync error:', error);
+        }
+    };
+
 
     const signInWithEmail = async (email: string, password: string) => {
         if (!supabase) {

@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs/promises";
 import os from "os";
 import { storage } from "./storage";
-import { insertVideoSchema, insertQueueZoneSchema, insertDetectionSnapshotSchema, insertSettingsSchema, insertUserSchema } from "@shared/schema";
+import { insertQueueZoneSchema, insertDetectionSnapshotSchema, insertSettingsSchema, insertUserSchema } from "@shared/schema";
 import { startMockDetection, stopMockDetection, isDetectionRunning, setUpdateCallback, getCurrentVideoId as getMockVideoId } from "./detection-mock";
 import { startYoloDetection, stopYoloDetection, isYoloRunning, setYoloUpdateCallback, getCurrentVideoId as getYoloVideoId } from "./detection-yolo";
 import { captureStreamFrame, validateStreamUrl } from "./stream-capture";
@@ -24,17 +24,17 @@ import { attachSupabaseUser, requireSupabaseAuth } from "./supabase-auth";
 // Configure multer for video uploads
 const upload = multer({
   storage: multer.diskStorage({
-    destination: async (req, file, cb) => {
+    destination: async (_req, _file, cb) => {
       const uploadsDir = path.join(process.cwd(), 'uploads');
       await fs.mkdir(uploadsDir, { recursive: true });
       cb(null, uploadsDir);
     },
-    filename: (req, file, cb) => {
+    filename: (_req, file, cb) => {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
       cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
   }),
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     const allowedTypes = /mp4|avi|mov|mkv|webm/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
@@ -106,8 +106,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Stop any running detection to prevent data leakage to next session
     stopMockDetection();
     stopYoloDetection();
-    // Supabase logout occurs client-side. Keep endpoint for compatibility.
-    res.sendStatus(200);
+    req.logout((err) => {
+      if (err) return next(err);
+
+      // Completely destroy the session for security
+      req.session.destroy((sessionErr) => {
+        if (sessionErr) {
+          console.warn("Session destroy warning:", sessionErr);
+        }
+
+        // Clear session cookie
+        res.clearCookie('connect.sid');
+        res.sendStatus(200);
+      });
+    });
   });
 
   app.post("/api/admin/reset", async (req, res) => {
@@ -187,7 +199,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     });
   });
-  const httpServer = createServer(app);
+
+  // Supabase OAuth callback - syncs Supabase user to local database
+  app.post("/api/auth/supabase-sync", async (req, res) => {
+    try {
+      const { email, userId: supabaseUserId } = req.body;
+
+      if (!email || !supabaseUserId) {
+        return res.status(400).json({ error: "Missing email or userId" });
+      }
+
+      // Try to find existing user by email first (important for Gmail OAuth)
+      let user = await storage.getUserByEmail(email);
+
+      if (!user) {
+        // Create new user for Supabase OAuth if doesn't exist
+        const { hashPassword } = await import("./auth");
+        const tempPassword = await hashPassword(supabaseUserId); // Use Supabase ID as placeholder
+
+        user = await storage.createUser({
+          username: email,
+          password: tempPassword,
+          email: email,
+          role: "viewer",
+        });
+      }
+
+      // Log in the user via session
+      req.login(user, (err) => {
+        if (err) {
+          console.error("Supabase sync login error:", err);
+          return res.status(500).json({ error: "Login failed" });
+        }
+
+        req.session.save((err) => {
+          if (err) console.error("Session save error:", err);
+          res.json({ user, message: "Synced successfully" });
+        });
+      });
+    } catch (error: any) {
+      console.error("Supabase sync error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+const httpServer = createServer(app);
 
   // WebSocket server for real-time detection updates
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
@@ -323,14 +378,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/videos', isAuthenticated, async (req: any, res) => {
     try {
-      // If user is a viewer (guest), allow them to see all videos in the system
-      // This is necessary for the mobile dashboard to work
-      if (req.user.role === 'viewer' || req.user.role === 'guest') {
+      // Each user only sees their own videos (except admin sees all)
+      if (req.user.role === 'admin') {
         const videos = await storage.getAllSystemVideos();
         return res.json(videos);
       }
 
-      // Otherwise, only show videos uploaded by the user
+      // All other users (viewer, guest) only see their own videos
       const videos = await storage.getAllVideos(req.user.id);
       res.json(videos);
     } catch (error: any) {
@@ -352,25 +406,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/videos/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const video = await storage.getVideo(req.params.id);
+      const videoId = req.params.id;
+      const userId = req.user.id;
+
+      console.log(`Delete request: videoId=${videoId}, userId=${userId}`);
+
+      const video = await storage.getVideo(videoId);
       if (!video) {
+        console.log(`Video not found: ${videoId}`);
         return res.status(404).json({ error: 'Video not found' });
       }
 
-      if (video.userId !== req.user.id) {
-        return res.status(403).json({ error: 'Unauthorized' });
+      console.log(`Video found: userId=${video.userId}, requestUserId=${userId}`);
+
+      if (video.userId !== userId) {
+        console.log(`Unauthorized delete attempt: video.userId=${video.userId}, req.user.id=${userId}`);
+        return res.status(403).json({ error: 'Unauthorized - You can only delete your own videos' });
       }
 
       // Delete the video file
       try {
         await fs.unlink(video.filepath);
+        console.log(`Deleted file: ${video.filepath}`);
       } catch (err) {
         console.error('Error deleting video file:', err);
       }
 
-      const deleted = await storage.deleteVideo(req.params.id);
+      const deleted = await storage.deleteVideo(videoId);
+      console.log(`Video deleted from DB: ${deleted}`);
       res.json({ success: deleted });
     } catch (error: any) {
+      console.error('Delete error:', error);
       res.status(500).json({ error: error.message });
     }
   });
