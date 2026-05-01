@@ -170,29 +170,31 @@ function Router() {
         </div>
       </header>
 
-      <main className="flex-1 bg-background">
-        <Switch>
-          <Route path="/auth" component={AuthPage} />
-          <Route path="/">
-            {() => <ProtectedRoute component={HomePage} />}
-          </Route>
-          <Route path="/setup">
-            {() => <ProtectedRoute component={Setup} adminOnly />}
-          </Route>
-          <Route path="/dashboard">
-            {() => <ProtectedRoute component={Dashboard} />}
-          </Route>
-          <Route path="/analytics">
-            {() => <ProtectedRoute component={Analytics} />}
-          </Route>
-          <Route path="/tv-dashboard">
-            {() => <ProtectedRoute component={TvDashboard} />}
-          </Route>
-          <Route path="/admin/profile">
-            {() => <ProtectedRoute component={AdminProfile} />}
-          </Route>
-          <Route component={NotFound} />
-        </Switch>
+      <main className="flex-1 bg-background overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <Switch>
+            <Route path="/auth" component={AuthPage} />
+            <Route path="/">
+              {() => <ProtectedRoute component={HomePage} />}
+            </Route>
+            <Route path="/setup">
+              {() => <ProtectedRoute component={Setup} />}
+            </Route>
+            <Route path="/dashboard">
+              {() => <ProtectedRoute component={Dashboard} />}
+            </Route>
+            <Route path="/analytics">
+              {() => <ProtectedRoute component={Analytics} />}
+            </Route>
+            <Route path="/tv-dashboard">
+              {() => <ProtectedRoute component={TvDashboard} />}
+            </Route>
+            <Route path="/admin/profile">
+              {() => <ProtectedRoute component={AdminProfile} />}
+            </Route>
+            <Route component={NotFound} />
+          </Switch>
+        </div>
       </main>
 
       <footer className="border-t border-border/50 bg-card/50 mt-auto">
