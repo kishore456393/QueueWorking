@@ -23,8 +23,13 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+    const sessionSecret = process.env.SESSION_SECRET;
+    if (!sessionSecret) {
+        throw new Error("SESSION_SECRET environment variable is required. Generate one with: node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\"");
+    }
+
     const sessionSettings: session.SessionOptions = {
-        secret: process.env.SESSION_SECRET || "artistry-edu-secret-key",
+        secret: sessionSecret,
         resave: false,
         saveUninitialized: false,
         store: storage.sessionStore,
@@ -66,16 +71,6 @@ export function setupAuth(app: Express) {
         }
     });
 
-    // Create default admin user if not exists
-    (async () => {
-        const admin = await storage.getUserByUsername("admin");
-        if (!admin) {
-            const hashedPassword = await hashPassword("admin");
-            await storage.createUser({
-                username: "admin",
-                password: hashedPassword,
-                role: "admin",
-            });
-        }
-    })();
+    // Default admin auto-creation REMOVED for security.
+    // First admin user should be created via Supabase Auth + registration flow.
 }

@@ -86,7 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({
         ...validatedData,
         password: hashedPassword,
-        role: "admin", // Default to admin for now as requested
+        role: "viewer",
       });
 
       res.status(201).json({ message: "Account created successfully" });
@@ -122,20 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/admin/reset", async (req, res) => {
-    // In a real app, protect this with admin check. 
-    // For this prototype/request, we allow it to fulfill the user's request to "delete previously saved accounts".
-    await storage.clearUsers();
-    // Re-seed admin
-    const { hashPassword } = await import("./auth");
-    const hashedPassword = await hashPassword("admin");
-    await storage.createUser({
-      username: "admin",
-      password: hashedPassword,
-      role: "admin",
-    });
-    res.json({ message: "All accounts deleted (admin restored)" });
-  });
+  // /api/admin/reset — REMOVED for security (allowed unauthenticated user deletion)
 
   app.get("/api/user", (req, res) => {
     if (!req.user) return res.sendStatus(401);
@@ -155,24 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DEBUG: List all users (remove in production!)
-  app.get("/api/debug/users", async (req, res) => {
-    try {
-      const allUsers = await storage.getAllUsers();
-      // Don't send passwords, just usernames and IDs
-      const safeUsers = allUsers.map(u => ({
-        id: u.id,
-        username: u.username,
-        email: u.email,
-        role: u.role,
-        firstName: u.firstName,
-        lastName: u.lastName
-      }));
-      res.json(safeUsers);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+  // /api/debug/users — REMOVED for security (leaked all user data without auth)
 
   // Guest login via Magic Link (QR Code)
   app.get("/api/auth/guest-login", async (req, res) => {
@@ -247,14 +217,39 @@ const httpServer = createServer(app);
   // WebSocket server for real-time detection updates
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-  wss.on('connection', (ws) => {
-    console.log('WebSocket client connected');
-    wsClients.add(ws);
+  wss.on('connection', async (ws, req) => {
+    // Authenticate WebSocket connections via Supabase Bearer token
+    try {
+      const url = new URL(req.url || '', `http://${req.headers.host}`);
+      const token = url.searchParams.get('token');
 
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
-      wsClients.delete(ws);
-    });
+      if (!token) {
+        console.log('WebSocket rejected: no token');
+        ws.close(4001, 'Authentication required');
+        return;
+      }
+
+      // Verify token with Supabase
+      const { supabaseAnon } = await import('./supabase');
+      const { data, error } = await supabaseAnon.auth.getUser(token);
+
+      if (error || !data.user) {
+        console.log('WebSocket rejected: invalid token');
+        ws.close(4003, 'Invalid token');
+        return;
+      }
+
+      console.log(`WebSocket client authenticated: ${data.user.email}`);
+      wsClients.add(ws);
+
+      ws.on('close', () => {
+        console.log('WebSocket client disconnected');
+        wsClients.delete(ws);
+      });
+    } catch (err) {
+      console.error('WebSocket auth error:', err);
+      ws.close(4000, 'Authentication error');
+    }
   });
 
   // Broadcast detection updates to all connected clients
@@ -356,7 +351,7 @@ const httpServer = createServer(app);
   });
 
   // Capture frame from camera stream
-  app.get('/api/cameras/:id/frame', async (req, res) => {
+  app.get('/api/cameras/:id/frame', isAuthenticated, async (req: any, res) => {
     try {
       const video = await storage.getVideo(req.params.id);
 
@@ -392,7 +387,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.get('/api/videos/:id', async (req, res) => {
+  app.get('/api/videos/:id', isAuthenticated, async (req: any, res) => {
     try {
       const video = await storage.getVideo(req.params.id);
       if (!video) {
@@ -442,7 +437,7 @@ const httpServer = createServer(app);
   });
 
   // Queue Zone routes
-  app.post('/api/queue-zones', async (req, res) => {
+  app.post('/api/queue-zones', isAuthenticated, async (req: any, res) => {
     try {
       const validatedData = insertQueueZoneSchema.parse(req.body);
       const zone = await storage.createQueueZone(validatedData);
@@ -452,7 +447,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.get('/api/queue-zones/:videoId', async (req, res) => {
+  app.get('/api/queue-zones/:videoId', isAuthenticated, async (req: any, res) => {
     try {
       const zones = await storage.getQueueZonesByVideo(req.params.videoId);
       res.json(zones);
@@ -461,7 +456,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.delete('/api/queue-zones/:videoId', async (req, res) => {
+  app.delete('/api/queue-zones/:videoId', isAuthenticated, async (req: any, res) => {
     try {
       const deleted = await storage.deleteQueueZonesByVideo(req.params.videoId);
       res.json({ success: deleted });
@@ -471,7 +466,7 @@ const httpServer = createServer(app);
   });
 
   // Detection Snapshot routes
-  app.post('/api/detection-snapshots', async (req, res) => {
+  app.post('/api/detection-snapshots', isAuthenticated, async (req: any, res) => {
     try {
       const validatedData = insertDetectionSnapshotSchema.parse(req.body);
       const snapshot = await storage.createDetectionSnapshot(validatedData);
@@ -488,7 +483,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.get('/api/detection-snapshots/latest/:videoId', async (req, res) => {
+  app.get('/api/detection-snapshots/latest/:videoId', isAuthenticated, async (req: any, res) => {
     try {
       const snapshot = await storage.getLatestDetectionSnapshot(req.params.videoId);
       if (!snapshot) {
@@ -500,7 +495,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.get('/api/detection-snapshots/:videoId', async (req, res) => {
+  app.get('/api/detection-snapshots/:videoId', isAuthenticated, async (req: any, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
       const snapshots = await storage.getDetectionSnapshotsByVideo(req.params.videoId, limit);
@@ -510,7 +505,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.get('/api/analytics/heatmap/:videoId', async (req, res) => {
+  app.get('/api/analytics/heatmap/:videoId', isAuthenticated, async (req: any, res) => {
     try {
       const heatmapData = await storage.getHeatmapData(req.params.videoId);
       res.json(heatmapData);
@@ -519,7 +514,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.get('/api/analytics/export/:videoId', async (req, res) => {
+  app.get('/api/analytics/export/:videoId', isAuthenticated, async (req: any, res) => {
     try {
       const snapshots = await storage.getDetectionSnapshotsByVideo(req.params.videoId);
 
@@ -548,7 +543,7 @@ const httpServer = createServer(app);
   });
 
   // Settings routes
-  app.get('/api/settings', async (req, res) => {
+  app.get('/api/settings', isAuthenticated, async (req: any, res) => {
     try {
       const settings = await storage.getSettings();
       res.json(settings);
@@ -557,7 +552,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.put('/api/settings', async (req, res) => {
+  app.put('/api/settings', isAuthenticated, async (req: any, res) => {
     try {
       const validatedData = insertSettingsSchema.parse(req.body);
       const settings = await storage.createOrUpdateSettings(validatedData);
@@ -580,7 +575,7 @@ const httpServer = createServer(app);
   });
 
   // Video frame extraction endpoint
-  app.get('/api/videos/:id/frame', async (req, res) => {
+  app.get('/api/videos/:id/frame', isAuthenticated, async (req: any, res) => {
     try {
       const video = await storage.getVideo(req.params.id);
       if (!video) {
@@ -594,7 +589,7 @@ const httpServer = createServer(app);
   });
 
   // Detection control endpoints
-  app.post('/api/detection/start/:videoId', async (req, res) => {
+  app.post('/api/detection/start/:videoId', isAuthenticated, async (req: any, res) => {
     try {
       const video = await storage.getVideo(req.params.videoId);
       if (!video) {
@@ -631,7 +626,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.post('/api/detection/stop', async (req, res) => {
+  app.post('/api/detection/stop', isAuthenticated, async (req: any, res) => {
     try {
       stopMockDetection();
       stopYoloDetection();
@@ -641,7 +636,7 @@ const httpServer = createServer(app);
     }
   });
 
-  app.get('/api/detection/status', async (req, res) => {
+  app.get('/api/detection/status', isAuthenticated, async (req: any, res) => {
     try {
       const activeVideoId = getYoloVideoId() || getMockVideoId();
       res.json({

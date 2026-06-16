@@ -1,6 +1,8 @@
 import base64
 import io
 import os
+import threading
+import time
 from typing import List, Dict, Any
 
 import numpy as np
@@ -208,27 +210,89 @@ class CaptureResponse(BaseModel):
     error: str | None = None
 
 
+# Thread-safe persistent stream cache
+class CameraStreamReader:
+    def __init__(self, source):
+        self.source = source
+        self.cap = cv2.VideoCapture(source)
+        self.latest_frame = None
+        self.last_accessed = time.time()
+        self.running = True
+        self.lock = threading.Lock()
+        self.thread = threading.Thread(target=self._update, daemon=True)
+        self.thread.start()
+
+    def _update(self):
+        print(f"[StreamReader] Thread started for source: {self.source}")
+        while self.running:
+            # Shutdown after 15 seconds of inactivity
+            if time.time() - self.last_accessed > 15.0:
+                print(f"[StreamReader] Source {self.source} inactive for 15s, stopping thread.")
+                break
+
+            if not self.cap.isOpened():
+                self.cap = cv2.VideoCapture(self.source)
+                time.sleep(2.0)
+                continue
+
+            ret, frame = self.cap.read()
+            if ret:
+                with self.lock:
+                    self.latest_frame = frame
+            else:
+                time.sleep(0.01)
+
+        self.running = False
+        self.cap.release()
+        
+        # Safely remove from active_streams
+        global active_streams
+        with active_streams_lock:
+            if str(self.source) in active_streams:
+                active_streams.pop(str(self.source), None)
+
+    def get_frame(self):
+        self.last_accessed = time.time()
+        with self.lock:
+            return self.latest_frame
+
+    def stop(self):
+        self.running = False
+
+
+active_streams = {}
+active_streams_lock = threading.Lock()
+
+
 @app.post('/capture', response_model=CaptureResponse)
 def capture_frame(req: CaptureRequest):
     """
-    Capture a single frame from a video source (URL or device index)
+    Capture a single frame from a video source (URL or device index) using cached StreamReader threads
     """
     try:
-        # Parse source: if it looks like an int, treat as device index
         source = req.source
         if isinstance(source, str) and source.isdigit():
             source = int(source)
-            
-        cap = cv2.VideoCapture(source)
-        if not cap.isOpened():
-            return CaptureResponse(error=f"Could not open video source: {source}")
-            
-        ret, frame = cap.read()
-        cap.release()
+
+        key = str(source)
         
-        if not ret:
-            return CaptureResponse(error="Failed to read frame")
-            
+        with active_streams_lock:
+            reader = active_streams.get(key)
+            if reader is None or not reader.running:
+                reader = CameraStreamReader(source)
+                active_streams[key] = reader
+
+        # Wait a moment for the first frame if the stream is newly opened
+        frame = None
+        for _ in range(50):  # Wait up to 5 seconds
+            frame = reader.get_frame()
+            if frame is not None:
+                break
+            time.sleep(0.1)
+
+        if frame is None:
+            return CaptureResponse(error="Failed to read frame from stream (timeout waiting for first frame)")
+
         # Encode frame to base64
         _, buffer = cv2.imencode('.jpg', frame)
         frame_b64 = base64.b64encode(buffer).decode('utf-8')

@@ -73,6 +73,7 @@ export default function Dashboard() {
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [isAnnouncing, setIsAnnouncing] = useState(false);
   const [viewMode, setViewMode] = useState<'single' | 'grid'>('single');
+  const wsRef = useRef<WebSocket | null>(null);
 
   const { data: settings, isLoading: isSettingsLoading, isError: isSettingsError } = useQuery<Settings>({
     queryKey: ['/api/settings'],
@@ -145,32 +146,46 @@ export default function Dashboard() {
   useEffect(() => {
     // Use wss:// for HTTPS connections, ws:// for HTTP
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    console.log('Connecting to WebSocket:', wsUrl);
 
-    const ws = new WebSocket(wsUrl);
+    const connectWebSocket = async () => {
+      // Get auth token for WebSocket authentication
+      const { supabase } = await import('@/lib/supabaseClient');
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
 
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      setWsConnected(true);
-    };
+      const wsUrl = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+      console.log('Connecting to WebSocket (authenticated)');
 
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'detection_update') {
-        // Only accept updates for the currently selected video
-        if (!selectedVideoId || message.data?.videoId === selectedVideoId) {
-          setLatestData(message.data);
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        setWsConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'detection_update') {
+          // Only accept updates for the currently selected video
+          if (!selectedVideoId || message.data?.videoId === selectedVideoId) {
+            setLatestData(message.data);
+          }
         }
-      }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setWsConnected(false);
+      };
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      setWsConnected(false);
-    };
+    connectWebSocket();
 
-    return () => ws.close();
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+    };
   }, [selectedVideoId]);
 
   // Reset latest websocket data when switching videos to avoid stale display

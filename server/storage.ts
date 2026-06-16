@@ -51,6 +51,7 @@ export class MemStorage implements IStorage {
   private videos: Map<string, Video>;
   private queueZones: Map<string, QueueZone>;
   private detectionSnapshots: Map<string, DetectionSnapshot>;
+  private latestFrames: Map<string, string>;
   private settings: Settings | undefined;
   private currentId: number;
   sessionStore: session.Store;
@@ -60,6 +61,7 @@ export class MemStorage implements IStorage {
     this.videos = new Map();
     this.queueZones = new Map();
     this.detectionSnapshots = new Map();
+    this.latestFrames = new Map();
     this.currentId = 1;
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
@@ -172,6 +174,11 @@ export class MemStorage implements IStorage {
   async createDetectionSnapshot(insertSnapshot: InsertDetectionSnapshot): Promise<DetectionSnapshot> {
     const id = randomUUID();
 
+    // Cache the latest frame in memory
+    if (insertSnapshot.frameData) {
+      this.latestFrames.set(insertSnapshot.videoId, insertSnapshot.frameData);
+    }
+
     // Edge computing privacy: Store only aggregate statistics, not full frame data
     const snapshot: DetectionSnapshot = {
       id,
@@ -183,15 +190,18 @@ export class MemStorage implements IStorage {
       bestQueue: insertSnapshot.bestQueue,
       worstQueue: insertSnapshot.worstQueue,
       recommendation: insertSnapshot.recommendation,
-      // Privacy: Only store frame data temporarily for visualization
-      // It will be automatically removed after 1 hour by the cleanup service
-      frameData: insertSnapshot.frameData || null,
+      // Privacy: Only store frame data temporarily in memory cache
+      frameData: null,
       detections: (insertSnapshot.detections as Array<{ x: number, y: number }>) || [],
     };
 
     this.detectionSnapshots.set(id, snapshot);
     console.log(`[Privacy] Snapshot created - aggregate stats only, auto - expires in 1 hour`);
-    return snapshot;
+    
+    // Inject cached frame data back into the returned snapshot for real-time WebSocket broadcast
+    const returnedSnapshot = { ...snapshot };
+    returnedSnapshot.frameData = insertSnapshot.frameData || null;
+    return returnedSnapshot;
   }
 
   async getLatestDetectionSnapshot(videoId: string): Promise<DetectionSnapshot | undefined> {
@@ -204,7 +214,13 @@ export class MemStorage implements IStorage {
       .filter((snapshot) => snapshot.videoId === videoId)
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-    return limit ? snapshots.slice(0, limit) : snapshots;
+    const result = limit ? snapshots.slice(0, limit) : snapshots;
+    
+    // Inject the latest frame into the most recent snapshot in the returned history list
+    if (result.length > 0) {
+      result[0].frameData = this.latestFrames.get(videoId) || null;
+    }
+    return result;
   }
 
   async getHeatmapData(videoId: string): Promise<Array<{ x: number, y: number, value: number }>> {
@@ -266,12 +282,12 @@ export class MemStorage implements IStorage {
     const cutoff = new Date(now.getTime() - ageInSeconds * 1000);
     let count = 0;
 
-    for (const [id, snapshot] of this.detectionSnapshots.entries()) {
+    this.detectionSnapshots.forEach((snapshot, id) => {
       if (snapshot.timestamp < cutoff) {
         this.detectionSnapshots.delete(id);
         count++;
       }
-    }
+    });
     return count;
   }
 }

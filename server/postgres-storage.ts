@@ -15,6 +15,9 @@ import pg from "pg";
 
 const PgStore = connectPgSimple(session);
 
+// Memory cache for the latest frame of each video to keep database size minimal
+const latestFrames = new Map<string, string>();
+
 export class PostgresStorage implements IStorage {
     sessionStore: session.Store;
     private database: NonNullable<typeof db>;
@@ -150,6 +153,13 @@ export class PostgresStorage implements IStorage {
     // Detection Snapshot methods
     async createDetectionSnapshot(insertSnapshot: InsertDetectionSnapshot): Promise<DetectionSnapshot> {
         const id = randomUUID();
+        
+        // Cache the latest frame in memory
+        if (insertSnapshot.frameData) {
+            latestFrames.set(insertSnapshot.videoId, insertSnapshot.frameData);
+        }
+
+        // Save to database with frameData set to null to prevent table bloat
         const result = await this.database.insert(detectionSnapshots).values({
             id,
             videoId: insertSnapshot.videoId,
@@ -159,7 +169,7 @@ export class PostgresStorage implements IStorage {
             bestQueue: insertSnapshot.bestQueue,
             worstQueue: insertSnapshot.worstQueue,
             recommendation: insertSnapshot.recommendation,
-            frameData: insertSnapshot.frameData || null,
+            frameData: null,
             detections: (insertSnapshot.detections as Array<{ x: number, y: number }>) || [],
         }).returning();
 
@@ -168,7 +178,13 @@ export class PostgresStorage implements IStorage {
         if (!result[0]) {
             throw new Error("Failed to create detection snapshot");
         }
-        return result[0];
+
+        // Inject cached frame data back into the returned snapshot for real-time WebSocket broadcast
+        const snapshot = result[0];
+        if (snapshot) {
+            snapshot.frameData = insertSnapshot.frameData || null;
+        }
+        return snapshot;
     }
 
     async getLatestDetectionSnapshot(videoId: string): Promise<DetectionSnapshot | undefined> {
@@ -177,7 +193,12 @@ export class PostgresStorage implements IStorage {
             .where(eq(detectionSnapshots.videoId, videoId))
             .orderBy(desc(detectionSnapshots.timestamp))
             .limit(1);
-        return result[0];
+        
+        const snapshot = result[0];
+        if (snapshot) {
+            snapshot.frameData = latestFrames.get(videoId) || null;
+        }
+        return snapshot;
     }
 
     async getDetectionSnapshotsByVideo(videoId: string, limit?: number): Promise<DetectionSnapshot[]> {
@@ -186,10 +207,13 @@ export class PostgresStorage implements IStorage {
             .where(eq(detectionSnapshots.videoId, videoId))
             .orderBy(desc(detectionSnapshots.timestamp));
 
-        if (limit) {
-            return await query.limit(limit);
+        const snapshots = limit ? await query.limit(limit) : await query;
+        
+        // Inject the latest frame into the most recent snapshot in the returned history list
+        if (snapshots.length > 0) {
+            snapshots[0].frameData = latestFrames.get(videoId) || null;
         }
-        return await query;
+        return snapshots;
     }
 
     async getHeatmapData(videoId: string): Promise<Array<{ x: number, y: number, value: number }>> {

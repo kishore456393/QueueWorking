@@ -100,21 +100,32 @@ export default function TvDashboard() {
     // WebSocket connection
     useEffect(() => {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
-        const ws = new WebSocket(wsUrl);
+        let ws: WebSocket | null = null;
 
-        ws.onopen = () => setWsConnected(true);
-        ws.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            if (message.type === 'detection_update') {
-                if (!selectedVideoId || message.data?.videoId === selectedVideoId) {
-                    setLatestData(message.data);
+        const connectWebSocket = async () => {
+            const { supabase } = await import('@/lib/supabaseClient');
+            const { data } = await supabase.auth.getSession();
+            const token = data.session?.access_token;
+            if (!token) return;
+
+            const wsUrl = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => setWsConnected(true);
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                if (message.type === 'detection_update') {
+                    if (!selectedVideoId || message.data?.videoId === selectedVideoId) {
+                        setLatestData(message.data);
+                    }
                 }
-            }
+            };
+            ws.onclose = () => setWsConnected(false);
         };
-        ws.onclose = () => setWsConnected(false);
 
-        return () => ws.close();
+        connectWebSocket();
+
+        return () => { if (ws) ws.close(); };
     }, [selectedVideoId]);
 
     const displayData = latestData || snapshot;

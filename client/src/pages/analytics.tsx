@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type DetectionSnapshot, type Video } from "@shared/schema";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, BarChart, Bar, ScatterChart, Scatter, ZAxis, ReferenceLine } from "recharts";
-import { TrendingUp, Users, Clock, Activity, Download, ArrowDownRight, ArrowUpRight, Zap, RefreshCw } from "lucide-react";
+import { TrendingUp, Users, Clock, Activity, Download, ArrowDownRight, ArrowUpRight, Zap, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -201,6 +201,7 @@ function QueueEfficiencyChart({ snapshots }: { snapshots?: DetectionSnapshot[] }
 export default function Analytics() {
   const [manualServiceRate, setManualServiceRate] = useState(2); // Minutes per person (Manual)
   const [useSmartWaitTime, setUseSmartWaitTime] = useState(true);
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(5);
   const [selectedVideoId, setSelectedVideoId] = useState<string | undefined>(undefined);
   const [wsConnected, setWsConnected] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -244,31 +245,41 @@ export default function Analytics() {
   // WebSocket connection for real-time updates
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    let ws: WebSocket | null = null;
 
-    const ws = new WebSocket(wsUrl);
+    const connectWebSocket = async () => {
+      const { supabase } = await import('@/lib/supabaseClient');
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
 
-    ws.onopen = () => {
-      setWsConnected(true);
-    };
+      const wsUrl = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+      ws = new WebSocket(wsUrl);
 
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'detection_update') {
-        // Invalidate query to refetch data if it's for the selected video
-        if (!selectedVideoId || message.data?.videoId === selectedVideoId) {
-          queryClient.invalidateQueries({ queryKey: ['/api/detection-snapshots', selectedVideoId] });
-          queryClient.invalidateQueries({ queryKey: ['/api/analytics/heatmap', selectedVideoId] });
-          setLastUpdated(new Date());
+      ws.onopen = () => {
+        setWsConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'detection_update') {
+          // Invalidate query to refetch data if it's for the selected video
+          if (!selectedVideoId || message.data?.videoId === selectedVideoId) {
+            queryClient.invalidateQueries({ queryKey: ['/api/detection-snapshots', selectedVideoId] });
+            queryClient.invalidateQueries({ queryKey: ['/api/analytics/heatmap', selectedVideoId] });
+            setLastUpdated(new Date());
+          }
         }
-      }
+      };
+
+      ws.onclose = () => {
+        setWsConnected(false);
+      };
     };
 
-    ws.onclose = () => {
-      setWsConnected(false);
-    };
+    connectWebSocket();
 
-    return () => ws.close();
+    return () => { if (ws) ws.close(); };
   }, [selectedVideoId]);
 
   // Calculate Throughput (People per Hour estimated)
@@ -354,6 +365,113 @@ export default function Analytics() {
       .sort((a, b) => parseInt(a.hour) - parseInt(b.hour));
   }, [snapshots]);
 
+  // SLA Compliance Rate Calculation (Estimated wait time <= SLA Target)
+  const slaComplianceRate = useMemo(() => {
+    if (!snapshots || snapshots.length === 0) return 100;
+    const compliantCount = snapshots.filter(s => {
+      const waitTime = s.totalPeople * activeServiceRate;
+      return waitTime <= slaTargetMinutes;
+    }).length;
+    return Math.round((compliantCount / snapshots.length) * 100);
+  }, [snapshots, activeServiceRate, slaTargetMinutes]);
+
+  // Queue Imbalance Index Calculation
+  const queueImbalanceStats = useMemo(() => {
+    if (!snapshots || snapshots.length === 0) return { score: 0, label: "Balanced", color: "text-emerald-500" };
+    
+    let totalDifference = 0;
+    let validCount = 0;
+
+    snapshots.forEach(s => {
+      if (s.queueCounts && s.queueCounts.length > 1) {
+        const max = Math.max(...s.queueCounts);
+        const min = Math.min(...s.queueCounts);
+        totalDifference += (max - min);
+        validCount++;
+      }
+    });
+
+    const avgDiff = validCount > 0 ? parseFloat((totalDifference / validCount).toFixed(1)) : 0;
+    
+    let label = "Balanced";
+    let color = "text-emerald-500";
+    if (avgDiff > 3.0) {
+      label = "Imbalanced";
+      color = "text-destructive";
+    } else if (avgDiff > 1.5) {
+      label = "Moderate";
+      color = "text-orange-500";
+    }
+
+    return { score: avgDiff, label, color };
+  }, [snapshots]);
+
+  // Dynamic Operational AI Recommendations
+  const operationalRecommendations = useMemo(() => {
+    const recs: string[] = [];
+    if (!snapshots || snapshots.length === 0) {
+      return ["Start camera detection to generate operational insights."];
+    }
+
+    // 1. Staffing / Peak Hour suggestion
+    if (busyHoursData.length > 0) {
+      const sortedHours = [...busyHoursData].sort((a, b) => b.avgPeople - a.avgPeople);
+      const peakHour = sortedHours[0];
+      if (peakHour && peakHour.avgPeople > 3) {
+        recs.push(`Peak traffic occurs around ${peakHour.hour} (average ${peakHour.avgPeople} people). We recommend scheduling an additional operator or staff member during this block to prevent customer bottleneck.`);
+      }
+    }
+
+    // 2. Queue imbalance suggestion
+    if (queueImbalanceStats.score > 1.5) {
+      recs.push(`Queue load is uneven (average discrepancy of ${queueImbalanceStats.score} people between lanes). Consider adding a queue manager to guide guests, or setting up a single snake-line queue system to ensure fairness.`);
+    } else {
+      recs.push("Queue lines are currently well-balanced. Ensure signage remains clear to maintain this distribution.");
+    }
+
+    // 3. SLA Breach suggestion
+    if (slaComplianceRate < 90) {
+      recs.push(`Your SLA compliance is at ${slaComplianceRate}%, which is below the standard target of 90%. We suggest reducing transaction processing times or opening more counters to meet your SLA speed targets.`);
+    } else {
+      recs.push(`Excellent! Your SLA compliance is at ${slaComplianceRate}%. Your current staffing levels are meeting target wait times.`);
+    }
+
+    return recs;
+  }, [snapshots, busyHoursData, queueImbalanceStats, slaComplianceRate]);
+
+  // Real-time Alerts / Exception Log Feed
+  const alertsFeed = useMemo(() => {
+    const alerts: Array<{ id: string; time: string; message: string; type: "critical" | "warning" }> = [];
+    if (!snapshots) return [];
+
+    snapshots.slice(0, 30).forEach(s => {
+      const timeStr = new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const waitTime = s.totalPeople * activeServiceRate;
+
+      if (waitTime > slaTargetMinutes) {
+        alerts.push({
+          id: `${s.id}-sla`,
+          time: timeStr,
+          message: `SLA Target breached: estimated wait time reached ~${Math.round(waitTime)} mins (Target: ${slaTargetMinutes} mins).`,
+          type: "critical"
+        });
+      }
+
+      s.queueCounts.forEach((count, idx) => {
+        if (count > 5) {
+          alerts.push({
+            id: `${s.id}-q-${idx}`,
+            time: timeStr,
+            message: `Queue ${idx + 1} is overcrowded with ${count} people waiting.`,
+            type: "warning"
+          });
+        }
+      });
+    });
+
+    return alerts.slice(0, 8); // Display the 8 most recent alerts
+  }, [snapshots, activeServiceRate, slaTargetMinutes]);
+
   const avgPeople = snapshots?.length
     ? Math.round(snapshots.reduce((sum, s) => sum + s.totalPeople, 0) / snapshots.length)
     : 0;
@@ -429,61 +547,79 @@ export default function Analytics() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 w-full md:w-auto">
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExport} disabled={!selectedVideoId}>
-              <Download className="mr-2 h-4 w-4" />
-              Export Report
-            </Button>
-          </div>
+        <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto items-stretch">
+          <Button variant="outline" onClick={handleExport} disabled={!selectedVideoId} className="h-10 md:self-start">
+            <Download className="mr-2 h-4 w-4" />
+            Export Report
+          </Button>
 
-          <Card className="w-full md:w-auto min-w-[300px]">
-            <CardHeader className="py-3">
-              <CardTitle className="text-sm font-medium flex justify-between items-center">
-                <span>Service Time Settings</span>
-                <div className="flex items-center space-x-2">
+          <Card className="w-full md:w-[260px]">
+            <CardHeader className="py-2 px-4">
+              <CardTitle className="text-xs font-medium flex justify-between items-center">
+                <span>Service Time</span>
+                <div className="flex items-center space-x-1">
                   <Switch
                     id="smart-mode"
                     checked={useSmartWaitTime}
                     onCheckedChange={setUseSmartWaitTime}
+                    className="scale-75 animate-none"
                   />
-                  <Label htmlFor="smart-mode" className="text-xs">Smart Mode</Label>
+                  <Label htmlFor="smart-mode" className="text-[10px]">Smart</Label>
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="py-3">
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <label className="text-xs text-muted-foreground block mb-2">
-                    {useSmartWaitTime && throughput > 0 ? (
-                      <span className="flex items-center gap-1 text-primary font-bold">
-                        <Zap className="w-3 h-3" /> Dynamic Rate: {activeServiceRate.toFixed(1)} min/person
-                      </span>
-                    ) : (
-                      <span>Manual Rate: <span className="font-bold text-foreground">{manualServiceRate} min/person</span></span>
-                    )}
-                  </label>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="10"
-                    step="0.5"
-                    value={manualServiceRate}
-                    onChange={(e) => setManualServiceRate(parseFloat(e.target.value))}
-                    disabled={useSmartWaitTime && throughput > 0}
-                    className={`w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer ${useSmartWaitTime && throughput > 0 ? 'opacity-50' : ''}`}
-                  />
-                </div>
-              </div>
+            <CardContent className="py-2 px-4">
+              <label className="text-[10px] text-muted-foreground block mb-1">
+                {useSmartWaitTime && throughput > 0 ? (
+                  <span className="flex items-center gap-1 text-primary font-bold">
+                    <Zap className="w-2.5 h-2.5" /> Rate: {activeServiceRate.toFixed(1)} m/p
+                  </span>
+                ) : (
+                  <span>Rate: <span className="font-bold text-foreground">{manualServiceRate} m/p</span></span>
+                )}
+              </label>
+              <input
+                type="range"
+                min="0.5"
+                max="10"
+                step="0.5"
+                value={manualServiceRate}
+                onChange={(e) => setManualServiceRate(parseFloat(e.target.value))}
+                disabled={useSmartWaitTime && throughput > 0}
+                className="w-full h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer"
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="w-full md:w-[260px]">
+            <CardHeader className="py-2 px-4">
+              <CardTitle className="text-xs font-medium flex justify-between items-center">
+                <span>SLA Target Limit</span>
+                <Badge className="text-[10px] py-0 px-1.5">{slaTargetMinutes} mins</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="py-2 px-4">
+              <label className="text-[10px] text-muted-foreground block mb-1">
+                Max allowable customer wait
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="15"
+                step="1"
+                value={slaTargetMinutes}
+                onChange={(e) => setSlaTargetMinutes(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer"
+              />
             </CardContent>
           </Card>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-8">
         <Card className="bg-gradient-to-br from-card to-secondary/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Occupancy</CardTitle>
+            <CardTitle className="text-sm font-medium font-bold">Avg Occupancy</CardTitle>
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
@@ -496,7 +632,7 @@ export default function Analytics() {
 
         <Card className="bg-gradient-to-br from-card to-secondary/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Est. Wait Time</CardTitle>
+            <CardTitle className="text-sm font-medium font-bold">Est. Wait Time</CardTitle>
             <Clock className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
@@ -505,7 +641,7 @@ export default function Analytics() {
               {useSmartWaitTime && throughput > 0 ? (
                 <Badge variant="outline" className="text-[10px] h-5 bg-orange-500/10 border-orange-500/20 text-orange-600">Smart Estimate</Badge>
               ) : (
-                "Based on manual rate"
+                "Manual rate based"
               )}
             </p>
           </CardContent>
@@ -513,7 +649,37 @@ export default function Analytics() {
 
         <Card className="bg-gradient-to-br from-card to-secondary/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Est. Throughput</CardTitle>
+            <CardTitle className="text-sm font-medium font-bold">SLA Compliance</CardTitle>
+            <CheckCircle2 className={`h-4 w-4 ${slaComplianceRate >= 90 ? 'text-emerald-500' : slaComplianceRate >= 75 ? 'text-orange-500' : 'text-destructive'}`} />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-3xl font-bold ${slaComplianceRate >= 90 ? 'text-emerald-600' : slaComplianceRate >= 75 ? 'text-orange-500' : 'text-destructive'}`}>
+              {slaComplianceRate}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Under {slaTargetMinutes} min wait target
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-card to-secondary/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-bold">Queue Balance</CardTitle>
+            <Activity className="h-4 w-4 text-cyan-500" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-3xl font-bold ${queueImbalanceStats.color}`}>
+              {queueImbalanceStats.label}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Discrepancy: {queueImbalanceStats.score} people
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-card to-secondary/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-bold">Est. Throughput</CardTitle>
             <Zap className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
@@ -526,7 +692,7 @@ export default function Analytics() {
 
         <Card className="bg-gradient-to-br from-card to-secondary/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Peak Count</CardTitle>
+            <CardTitle className="text-sm font-medium font-bold">Peak Count</CardTitle>
             <TrendingUp className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
@@ -534,6 +700,80 @@ export default function Analytics() {
             <p className="text-xs text-muted-foreground mt-1">
               Maximum observed
             </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* SLA, Insights and Alerts Feed Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        {/* Actionable AI Recommendations */}
+        <Card className="col-span-1 lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              Actionable Operational Insights
+            </CardTitle>
+            <CardDescription>
+              Data-driven recommendations to optimize staffing and line balance
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {operationalRecommendations.map((rec, idx) => (
+              <div key={idx} className="flex gap-3 items-start p-3 bg-secondary/35 rounded-lg border border-border/60">
+                <Badge variant="outline" className="mt-0.5 bg-primary/10 border-primary/20 text-primary font-mono text-xs">
+                  Insight {idx + 1}
+                </Badge>
+                <p className="text-sm leading-relaxed text-foreground/90">{rec}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Real-time Alerts Feed */}
+        <Card className="col-span-1">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-destructive" />
+              Live Alerts & Exception Log
+            </CardTitle>
+            <CardDescription>
+              Recent queue crowding and SLA breaches
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 max-h-[230px] overflow-y-auto pr-1">
+              {alertsFeed.length > 0 ? (
+                alertsFeed.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className={`p-3 rounded-lg border flex flex-col gap-1 transition-colors ${
+                      alert.type === "critical"
+                        ? "bg-destructive/15 border-destructive/20 text-destructive"
+                        : "bg-orange-500/10 border-orange-500/20 text-orange-600"
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <Badge
+                        variant={alert.type === "critical" ? "destructive" : "outline"}
+                        className={`text-[9px] py-0 px-1.5 uppercase ${
+                          alert.type === "warning" ? "border-orange-500/30 text-orange-600 bg-orange-500/5" : ""
+                        }`}
+                      >
+                        {alert.type}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground font-mono">{alert.time}</span>
+                    </div>
+                    <p className="text-xs text-foreground/90 font-medium leading-relaxed">
+                      {alert.message}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  No queue alerts or exceptions recorded.
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
